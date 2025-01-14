@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>USSD Payment</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USSD Payment System</title>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -62,17 +64,8 @@
             background-color: #2196F3;
         }
 
-        button.secondary-button:hover {
+        .secondary-button:hover {
             background-color: #0b7dda;
-        }
-
-        .transaction-log {
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-            background-color: #f9f9f9;
         }
 
         .log-entry {
@@ -89,29 +82,30 @@
 <body>
     <div class="container">
         <h1>USSD Payment System</h1>
-        
+
         <!-- SIM Slot Selection -->
         <label for="simSlots">Choose SIM:</label>
         <select id="simSlots"></select>
-        
+
         <!-- Payment Inputs -->
         <label for="amount">Amount:</label>
         <input type="number" id="amount" placeholder="Enter payment amount" />
-        
+
         <label for="merchantCode">Merchant Code:</label>
         <input type="text" id="merchantCode" placeholder="Enter merchant code (e.g., 12345)" />
-        
+
         <!-- Action Buttons -->
         <button onclick="initiatePayment()">Pay Now</button>
         <button class="secondary-button" onclick="fetchStoredSMS()">Fetch Stored SMS</button>
-        
+        <button class="secondary-button" onclick="sendDebugData()">Send Debug Data</button>
+
         <!-- Transaction Log -->
         <h2>Transaction Log</h2>
-        <div class="transaction-log" id="transactionLog"></div>
+        <div id="transactionLog" class="transaction-log"></div>
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
+        document.addEventListener("DOMContentLoaded", function() {
             if (window.android && android.fetchSIMSlots) {
                 android.fetchSIMSlots();
             } else {
@@ -119,16 +113,11 @@
             }
         });
 
-        /**
-         * Populates the SIM slots dropdown with data from the Android interface.
-         * @param {string} json - JSON string containing SIM slot details.
-         */
         function populateSIMSlots(json) {
-            console.log("Received SIM slots JSON:", json);
             try {
                 const slots = JSON.parse(json);
                 const select = document.getElementById("simSlots");
-                select.innerHTML = ""; // Clear existing options
+                select.innerHTML = "";
 
                 if (Object.keys(slots).length === 0) {
                     const option = document.createElement("option");
@@ -136,24 +125,20 @@
                     option.disabled = true;
                     option.selected = true;
                     select.add(option);
-                    return;
+                } else {
+                    Object.entries(slots).forEach(([index, name]) => {
+                        const option = document.createElement("option");
+                        option.value = index;
+                        option.text = name;
+                        select.add(option);
+                    });
                 }
-
-                Object.entries(slots).forEach(([index, name]) => {
-                    const option = document.createElement("option");
-                    option.value = index;
-                    option.text = name;
-                    select.add(option);
-                });
             } catch (error) {
                 console.error("Error populating SIM slots:", error);
                 alert("Error populating SIM slots: " + error.message);
             }
         }
 
-        /**
-         * Validates input fields and initiates a USSD payment through the Android interface.
-         */
         function initiatePayment() {
             const simSlot = document.getElementById("simSlots").value;
             const amount = document.getElementById("amount").value;
@@ -177,8 +162,6 @@
                 ussdCode: `*115*8*${merchantCode}*${amount}#`
             });
 
-            console.log("Sending payment payload to Android:", payload);
-
             if (window.android && android.dialThis) {
                 android.dialThis(payload);
             } else {
@@ -186,20 +169,22 @@
             }
         }
 
-        /**
-         * Displays the fetched SMS messages.
-         * @param {string} json - JSON string containing SMS data.
-         */
+        function fetchStoredSMS() {
+            if (window.android && android.fetchStoredSMS) {
+                android.fetchStoredSMS();
+            } else {
+                alert("Android interface not available.");
+            }
+        }
+
         function displayFetchedSMS(json) {
-            console.log("Displaying fetched SMS JSON:", json);
             try {
                 const messages = JSON.parse(json);
                 const logDiv = document.getElementById("transactionLog");
-                logDiv.innerHTML = ""; // Clear existing logs
+                logDiv.innerHTML = "";
 
-                messages.forEach(message => {
+                messages.forEach((message) => {
                     const logEntry = document.createElement("div");
-                    logEntry.classList.add("log-entry");
                     logEntry.textContent = `TID: ${message.transactionId}, Amount: ${message.amount}, Status: ${message.status}`;
                     logDiv.appendChild(logEntry);
                 });
@@ -209,13 +194,9 @@
             }
         }
 
-        /**
-         * Fetches stored SMS messages through the Android interface.
-         */
-        function fetchStoredSMS() {
-            console.log("Fetching stored SMS...");
-            if (window.android && android.fetchStoredSMS) {
-                android.fetchStoredSMS();
+        function sendDebugData() {
+            if (window.android && android.sendDebugData) {
+                android.sendDebugData();
             } else {
                 alert("Android interface not available.");
             }

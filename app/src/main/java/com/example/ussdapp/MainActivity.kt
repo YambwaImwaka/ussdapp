@@ -32,8 +32,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Initialize Firebase
+        Log.d("MainActivity", "Initializing Firebase")
         FirebaseApp.initializeApp(this)
         firestore = FirebaseFirestore.getInstance()
+
+        if (firestore == null) {
+            Log.e("MainActivity", "Failed to initialize Firestore")
+        } else {
+            Log.d("MainActivity", "Firestore initialized successfully")
+        }
 
         // Check and request permissions
         checkAndRequestPermissions()
@@ -64,6 +71,7 @@ class MainActivity : ComponentActivity() {
 
     @JavascriptInterface
     fun fetchSIMSlots() {
+        Log.d("WebView", "fetchSIMSlots called")
         try {
             val subscriptionManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
             val activeSubscriptionInfoList = subscriptionManager.activeSubscriptionInfoList ?: emptyList()
@@ -71,16 +79,21 @@ class MainActivity : ComponentActivity() {
             if (activeSubscriptionInfoList.isNotEmpty()) {
                 val simSlots = activeSubscriptionInfoList.associate { it.simSlotIndex to it.displayName.toString() }
                 val jsonResult = Gson().toJson(simSlots)
+                Log.d("SIM Slots", "Fetched SIM Slots: $jsonResult")
                 runOnUiThread {
                     webView?.evaluateJavascript("populateSIMSlots('$jsonResult')", null)
                 }
             } else {
+                Log.d("SIM Slots", "No active SIMs found.")
                 runOnUiThread {
                     webView?.evaluateJavascript("populateSIMSlots('{}')", null)
                 }
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error fetching SIM slots: ${e.message}")
+            Log.e("SIM Slots", "Error fetching SIM slots: ${e.message}")
+            runOnUiThread {
+                webView?.evaluateJavascript("populateSIMSlots('{}')", null)
+            }
         }
     }
 
@@ -89,11 +102,12 @@ class MainActivity : ComponentActivity() {
         try {
             val smsList = smsReceiver.fetchStoredSMS(this)
             val jsonResult = Gson().toJson(smsList)
+            Log.d("SMS", "Fetched SMS: $jsonResult")
             runOnUiThread {
                 webView?.evaluateJavascript("displayFetchedSMS('$jsonResult')", null)
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error fetching SMS: ${e.message}")
+            Log.e("SMS", "Error fetching SMS: ${e.message}")
         }
     }
 
@@ -102,45 +116,71 @@ class MainActivity : ComponentActivity() {
         try {
             val data = Gson().fromJson(payload, Map::class.java)
             val ussdCode = data["ussdCode"] as String
-            val simSlot = (data["simSlot"] as String).toIntOrNull() ?: 0 // Default to SIM 0 if invalid
-
             val encodedUssdCode = ussdCode.replace("#", Uri.encode("#"))
             val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$encodedUssdCode"))
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                val subscriptionManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
-                val subscriptionInfoList = subscriptionManager.activeSubscriptionInfoList
-                if (simSlot < subscriptionInfoList.size) {
-                    val subscriptionId = subscriptionInfoList[simSlot].subscriptionId
-                    intent.putExtra("android.telecom.extra.PHONE_ACCOUNT_HANDLE", subscriptionId)
-                }
-            }
-
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
                 startActivity(intent)
             } else {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error dialing USSD: ${e.message}")
+            Log.e("USSD", "Error dialing USSD: ${e.message}")
         }
     }
 
-    private fun checkAndRequestPermissions() {
-        val permissionsNeeded = mutableListOf(
-            Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.READ_SMS,
-            Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.CALL_PHONE
+    @JavascriptInterface
+    fun sendDebugData() {
+        val debugTransaction = mapOf(
+            "status" to "DEBUG",
+            "amount" to "100.00",
+            "tillNumber" to "999999",
+            "recipientName" to "Test Merchant",
+            "balance" to "500.00",
+            "transactionId" to "DEBUG12345",
+            "reason" to null
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+
+        firestore.collection("transactions")
+            .add(debugTransaction)
+            .addOnSuccessListener {
+                Log.d("MainActivity", "Debug data sent successfully: $debugTransaction")
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "alert('Debug data sent successfully to Firestore!')",
+                        null
+                    )
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("MainActivity", "Failed to send debug data: ${e.message}")
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "alert('Failed to send debug data to Firestore: ${e.message}')",
+                        null
+                    )
+                }
+            }
+    }
+
+    private fun checkAndRequestPermissions() {
+        val permissionsNeeded = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.RECEIVE_SMS)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.READ_SMS)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.READ_PHONE_STATE)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.CALL_PHONE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        val permissionsToRequest = permissionsNeeded.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (permissionsToRequest.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), REQUEST_PERMISSIONS)
+        if (permissionsNeeded.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsNeeded.toTypedArray(), REQUEST_PERMISSIONS)
         }
     }
 
