@@ -109,23 +109,31 @@ class MainActivity : ComponentActivity() {
     @JavascriptInterface
     fun dialThis(payload: String) {
         try {
+            // Deserialize the payload
             val data: Map<String, Any> = Gson().fromJson(payload, object : TypeToken<Map<String, Any>>() {}.type)
-            val ussdCode = data["ussdCode"] as String
-            val subscriptionId = (data["simSlot"] as Double).toInt()
-            val encodedUssdCode = ussdCode.replace("#", Uri.encode("#"))
 
+            // Extract data from the JSON
+            val ussdCode = data["ussdCode"] as? String ?: throw IllegalArgumentException("Invalid USSD code")
+            val simSlot = (data["simSlot"] as? Double)?.toInt() ?: throw IllegalArgumentException("Invalid SIM slot")
+
+            // Encode USSD code to handle special characters
+            val encodedUssdCode = Uri.encode(ussdCode)
+
+            // Create the dialing intent
+            val ussdUri = Uri.parse("tel:$encodedUssdCode") // Avoid reassignment issues
             val intent = Intent(Intent.ACTION_CALL).apply {
-                data = Uri.parse("tel:$encodedUssdCode")
-                putExtra("android.telecom.extra.SUBSCRIPTION_ID", subscriptionId)
+                this.data = ussdUri // Explicitly set the URI
+                putExtra("android.telecom.extra.SUBSCRIPTION_ID", simSlot)
             }
 
+            // Check CALL_PHONE permission
             if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
                 startActivity(intent)
             } else {
                 ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error dialing USSD: ${e.message}")
+            Log.e("MainActivity", "Error in dialThis: ${e.message}", e)
         }
     }
 
