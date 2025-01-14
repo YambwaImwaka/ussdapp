@@ -66,27 +66,40 @@ class MainActivity : ComponentActivity() {
     fun fetchSIMSlots() {
         Log.d("MainActivity", "fetchSIMSlots called")
         try {
-            // Check for permission
+            // Check if the required permission is granted
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
                 Log.e("MainActivity", "Permission READ_PHONE_STATE not granted")
                 webView?.evaluateJavascript("populateSIMSlots('{}')", null)
                 return
             }
 
-            val subscriptionManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
-            val activeSubscriptions = subscriptionManager.activeSubscriptionInfoList ?: emptyList()
-
-            if (activeSubscriptions.isNotEmpty()) {
-                val simSlots = activeSubscriptions.associate {
-                    it.subscriptionId to it.displayName.toString()
-                }
-                val jsonResult = Gson().toJson(simSlots)
-                Log.d("SIM Slots", "Fetched SIM Slots: $jsonResult")
-                webView?.evaluateJavascript("populateSIMSlots('$jsonResult')", null)
+            val subscriptionManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
             } else {
-                Log.d("SIM Slots", "No active SIMs found.")
+                null
+            }
+
+            if (subscriptionManager != null) {
+                val activeSubscriptions = subscriptionManager.activeSubscriptionInfoList ?: emptyList()
+
+                if (activeSubscriptions.isNotEmpty()) {
+                    val simSlots = activeSubscriptions.associate {
+                        it.subscriptionId to it.displayName.toString()
+                    }
+                    val jsonResult = Gson().toJson(simSlots)
+                    Log.d("SIM Slots", "Fetched SIM Slots: $jsonResult")
+                    webView?.evaluateJavascript("populateSIMSlots('$jsonResult')", null)
+                } else {
+                    Log.d("SIM Slots", "No active SIMs found.")
+                    webView?.evaluateJavascript("populateSIMSlots('{}')", null)
+                }
+            } else {
+                Log.e("MainActivity", "SubscriptionManager is null")
                 webView?.evaluateJavascript("populateSIMSlots('{}')", null)
             }
+        } catch (e: SecurityException) {
+            Log.e("MainActivity", "Permission error: ${e.message}")
+            webView?.evaluateJavascript("populateSIMSlots('{}')", null)
         } catch (e: Exception) {
             Log.e("MainActivity", "Error fetching SIM slots: ${e.message}")
             webView?.evaluateJavascript("populateSIMSlots('{}')", null)
@@ -109,21 +122,20 @@ class MainActivity : ComponentActivity() {
     @JavascriptInterface
     fun dialThis(payload: String) {
         try {
-            // Deserialize the payload
+            // Deserialize the JSON payload to a Map
             val data: Map<String, Any> = Gson().fromJson(payload, object : TypeToken<Map<String, Any>>() {}.type)
 
-            // Extract data from the JSON
-            val ussdCode = data["ussdCode"] as? String ?: throw IllegalArgumentException("Invalid USSD code")
-            val simSlot = (data["simSlot"] as? Double)?.toInt() ?: throw IllegalArgumentException("Invalid SIM slot")
+            // Extract USSD code and SIM slot
+            val ussdCode = data["ussdCode"] as String
+            val subscriptionId = (data["simSlot"] as Double).toInt()
 
-            // Encode USSD code to handle special characters
-            val encodedUssdCode = Uri.encode(ussdCode)
+            // Create the intent for dialing the USSD code
+            val encodedUssdCode = Uri.encode("#")
+            val ussdUri = Uri.parse("tel:${ussdCode.replace("#", encodedUssdCode)}")
 
-            // Create the dialing intent
-            val ussdUri = Uri.parse("tel:$encodedUssdCode") // Avoid reassignment issues
             val intent = Intent(Intent.ACTION_CALL).apply {
-                this.data = ussdUri // Explicitly set the URI
-                putExtra("android.telecom.extra.SUBSCRIPTION_ID", simSlot)
+                data = ussdUri
+                putExtra("android.telecom.extra.PHONE_ACCOUNT_HANDLE", subscriptionId)
             }
 
             // Check CALL_PHONE permission
@@ -133,7 +145,7 @@ class MainActivity : ComponentActivity() {
                 ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error in dialThis: ${e.message}", e)
+            Log.e("MainActivity", "Error dialing USSD: ${e.message}")
         }
     }
 
