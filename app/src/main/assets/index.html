@@ -64,8 +64,17 @@
             background-color: #2196F3;
         }
 
-        .secondary-button:hover {
+        button.secondary-button:hover {
             background-color: #0b7dda;
+        }
+
+        .transaction-log {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
         }
 
         .log-entry {
@@ -97,15 +106,14 @@
         <!-- Action Buttons -->
         <button onclick="initiatePayment()">Pay Now</button>
         <button class="secondary-button" onclick="fetchStoredSMS()">Fetch Stored SMS</button>
-        <button class="secondary-button" onclick="sendDebugData()">Send Debug Data</button>
 
         <!-- Transaction Log -->
         <h2>Transaction Log</h2>
-        <div id="transactionLog" class="transaction-log"></div>
+        <div class="transaction-log" id="transactionLog"></div>
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", function () {
             if (window.android && android.fetchSIMSlots) {
                 android.fetchSIMSlots();
             } else {
@@ -117,7 +125,7 @@
             try {
                 const slots = JSON.parse(json);
                 const select = document.getElementById("simSlots");
-                select.innerHTML = "";
+                select.innerHTML = ""; // Clear existing options
 
                 if (Object.keys(slots).length === 0) {
                     const option = document.createElement("option");
@@ -125,16 +133,16 @@
                     option.disabled = true;
                     option.selected = true;
                     select.add(option);
-                } else {
-                    Object.entries(slots).forEach(([index, name]) => {
-                        const option = document.createElement("option");
-                        option.value = index;
-                        option.text = name;
-                        select.add(option);
-                    });
+                    return;
                 }
+
+                Object.entries(slots).forEach(([index, name]) => {
+                    const option = document.createElement("option");
+                    option.value = index;
+                    option.text = name;
+                    select.add(option);
+                });
             } catch (error) {
-                console.error("Error populating SIM slots:", error);
                 alert("Error populating SIM slots: " + error.message);
             }
         }
@@ -170,8 +178,11 @@
         }
 
         function fetchStoredSMS() {
-            if (window.android && android.fetchStoredSMS) {
-                android.fetchStoredSMS();
+            if (window.android && android.fetchSmsOnDemand) {
+                const result = window.android.fetchSmsOnDemand();
+                if (result) {
+                    displayFetchedSMS(result);
+                }
             } else {
                 alert("Android interface not available.");
             }
@@ -181,24 +192,16 @@
             try {
                 const messages = JSON.parse(json);
                 const logDiv = document.getElementById("transactionLog");
-                logDiv.innerHTML = "";
+                logDiv.innerHTML = ""; // Clear existing logs
 
                 messages.forEach((message) => {
                     const logEntry = document.createElement("div");
-                    logEntry.textContent = `TID: ${message.transactionId}, Amount: ${message.amount}, Status: ${message.status}`;
+                    logEntry.classList.add("log-entry");
+                    logEntry.textContent = `Sender: ${message.address}, Message: ${message.body}, Date: ${new Date(message.date).toLocaleString()}`;
                     logDiv.appendChild(logEntry);
                 });
             } catch (error) {
-                console.error("Error displaying fetched SMS:", error);
                 alert("Error displaying fetched SMS: " + error.message);
-            }
-        }
-
-        function sendDebugData() {
-            if (window.android && android.sendDebugData) {
-                android.sendDebugData();
-            } else {
-                alert("Android interface not available.");
             }
         }
     </script>

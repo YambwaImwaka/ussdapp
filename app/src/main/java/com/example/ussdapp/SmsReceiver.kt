@@ -1,134 +1,164 @@
+// Updated SMS Receiver with fetch on-demand and foreground handling
 package com.techtonic.ussdapp
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
+import android.database.Cursor
 import android.provider.Telephony
 import android.telephony.SmsMessage
 import android.util.Log
-import android.webkit.WebView
 import android.widget.Toast
-import com.google.firebase.firestore.FirebaseFirestore
+import androidx.core.app.ActivityCompat
 import com.google.gson.Gson
 
-class SmsReceiver(private val webView: WebView? = null) : BroadcastReceiver() {
+class SmsReceiver(private val webViewCallback: ((String) -> Unit)? = null) : BroadcastReceiver() {
 
     private val TAG = "SmsReceiver"
-    private val firestore = FirebaseFirestore.getInstance()
+    private var trustedServicePatterns: List<String> = emptyList()
+
+    fun updateTrustedServicePatterns(patterns: List<String>) {
+        trustedServicePatterns = patterns
+    }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            context.checkSelfPermission(android.Manifest.permission.READ_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            Log.e(TAG, "Permission to read SMS not granted.")
+        if (!hasPermission(context, android.Manifest.permission.READ_SMS)) {
+            requestPermission(context, android.Manifest.permission.READ_SMS)
             return
         }
 
-        val bundle = intent.extras
-        if (bundle != null) {
-            val pdus = bundle.get("pdus") as? Array<*> ?: return
-            for (pdu in pdus) {
-                val message = SmsMessage.createFromPdu(pdu as ByteArray, bundle.getString("format"))
-                val messageBody = message.messageBody
-                val sender = message.originatingAddress
+        val smsList = extractMessages(context, intent) ?: return
+        for (sms in smsList) {
+            if (isValidSender(sms["address"] ?: "", sms["serviceCenter"] ?: "")) {
+                sendToWebView(sms)
+            }
+        }
+    }
 
-                Log.d(TAG, "SMS received from: $sender, Message: $messageBody")
-                if (sender != null && sender.contains("Airtel Money", true)) {
-                    val transactionDetails = parseTransactionMessage(messageBody)
-                    if (transactionDetails.isNotEmpty()) {
-                        sendToFirestore(context, transactionDetails)
-                        sendToJavaScript(transactionDetails)
-                    } else {
-                        Log.w(TAG, "Unrecognized transaction format: $messageBody")
-                    }
+    private fun hasPermission(context: Context, permission: String): Boolean {
+        return ActivityCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestPermission(context: Context, permission: String) {
+        Toast.makeText(context, "SMS permission is required to receive messages.", Toast.LENGTH_SHORT).show()
+        Log.e(TAG, "SMS permission not granted.")
+    }
+
+    fun fetchSmsOnDemand(context: Context): List<Map<String, Any>>? {
+        if (!hasPermission(context, android.Manifest.permission.READ_SMS)) {
+            requestPermission(context, android.Manifest.permission.READ_SMS)
+            return null
+        }
+
+        val cursor: Cursor? = context.contentResolver.query(
+            Telephony.Sms.CONTENT_URI,
+            arrayOf(
+                Telephony.Sms.ADDRESS,
+                Telephony.Sms.BODY,
+                Telephony.Sms.DATE,
+                Telephony.Sms.PROTOCOL,
+                Telephony.Sms.THREAD_ID,
+                Telephony.Sms.READ,
+                Telephony.Sms.STATUS
+            ),
+            null,
+            null,
+            Telephony.Sms.DEFAULT_SORT_ORDER
+        )
+
+        val smsList = mutableListOf<Map<String, Any>>()
+
+        cursor?.use {
+            while (it.moveToNext()) {
+                val address = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)) ?: "Unknown"
+                val body = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.BODY)) ?: ""
+                val date = it.getLong(it.getColumnIndexOrThrow(Telephony.Sms.DATE))
+                val protocol = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.PROTOCOL)) ?: "Unknown"
+                val threadId = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)) ?: "Unknown"
+                val read = it.getInt(it.getColumnIndexOrThrow(Telephony.Sms.READ)) == 1
+                val status = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.STATUS)) ?: "Unknown"
+
+                val smsData = mapOf(
+                    "address" to address,
+                    "body" to body,
+                    "date" to date,
+                    "protocolIdentifier" to protocol,
+                    "threadId" to threadId,
+                    "read" to read,
+                    "status" to status
+                )
+
+                if (isValidSender(address, "")) { // Service center unavailable in this query
+                    smsList.add(smsData)
+                    sendToWebView(smsData) // Send each valid SMS to WebView
                 }
             }
         }
-    }
-
-    private fun parseTransactionMessage(messageBody: String): Map<String, String> {
-        return when {
-            messageBody.startsWith("Payment of") -> parseSuccessMessage(messageBody)
-            messageBody.startsWith("FAILED.TID") -> parseFailedMessage(messageBody)
-            else -> emptyMap()
-        }
-    }
-
-    private fun parseSuccessMessage(messageBody: String): Map<String, String> {
-        val regex = Regex(
-            "Payment of ZMW (\\d+\\.\\d{2}) Till Number (\\d+) ([A-Za-z\\s]+)\\. Airtel Money bal is ZMW (\\d+\\.\\d{2})\\. TID : ([A-Z0-9\\.]+)\\."
-        )
-        val match = regex.find(messageBody)
-        return match?.groupValues?.let {
-            mapOf(
-                "status" to "SUCCESS",
-                "amount" to it[1],
-                "tillNumber" to it[2],
-                "recipientName" to it[3],
-                "balance" to it[4],
-                "transactionId" to it[5]
-            )
-        } ?: emptyMap()
-    }
-
-    private fun parseFailedMessage(messageBody: String): Map<String, String> {
-        val regex = Regex(
-            "FAILED\\.TID: ([A-Z0-9\\.]+), Dear Customer, you have insufficient funds to complete this transaction\\..*"
-        )
-        val match = regex.find(messageBody)
-        return match?.groupValues?.let {
-            mapOf(
-                "status" to "FAILED",
-                "transactionId" to it[1],
-                "reason" to "Insufficient funds"
-            )
-        } ?: emptyMap()
-    }
-
-    private fun sendToFirestore(context: Context, transactionDetails: Map<String, String>) {
-        Log.d(TAG, "Attempting to send to Firestore: $transactionDetails")
-        firestore.collection("transactions")
-            .add(transactionDetails)
-            .addOnSuccessListener {
-                Toast.makeText(context, "Transaction saved online!", Toast.LENGTH_SHORT).show()
-                Log.d(TAG, "Transaction saved to Firestore successfully: $transactionDetails")
-            }
-            .addOnFailureListener { e ->
-                Toast.makeText(context, "Failed to save transaction online.", Toast.LENGTH_SHORT).show()
-                Log.e(TAG, "Failed to save transaction: ${e.message}")
-            }
-    }
-
-    private fun sendToJavaScript(transactionDetails: Map<String, String>) {
-        Log.d(TAG, "Sending transaction details to WebView: $transactionDetails")
-        webView?.evaluateJavascript(
-            "onSMSReceived(${Gson().toJson(transactionDetails)})",
-            null
-        )
-    }
-
-    fun fetchStoredSMS(context: Context): List<Map<String, String>> {
-        val smsList = mutableListOf<Map<String, String>>()
-        val cursor = context.contentResolver.query(
-            Telephony.Sms.Inbox.CONTENT_URI,
-            arrayOf(Telephony.Sms.Inbox.ADDRESS, Telephony.Sms.Inbox.BODY),
-            null,
-            null,
-            Telephony.Sms.Inbox.DEFAULT_SORT_ORDER
-        )
-
-        while (cursor?.moveToNext() == true) {
-            val address = cursor.getString(cursor.getColumnIndexOrThrow(Telephony.Sms.Inbox.ADDRESS))
-            val body = cursor.getString(cursor.getColumnIndexOrThrow(Telephony.Sms.Inbox.BODY))
-
-            if (address.contains("Airtel Money", true)) {
-                val transactionDetails = parseTransactionMessage(body)
-                if (transactionDetails.isNotEmpty()) {
-                    smsList.add(transactionDetails)
-                }
-            }
-        }
-        cursor?.close()
         return smsList
+    }
+
+    private fun extractMessages(context: Context, intent: Intent): List<Map<String, Any>>? {
+        val bundle = intent.extras ?: return null
+        val pdus = bundle.get("pdus") as? Array<*> ?: return null
+
+        val smsList = mutableListOf<Map<String, Any>>()
+        for (pdu in pdus) {
+            val message = SmsMessage.createFromPdu(pdu as ByteArray, bundle.getString("format"))
+            val smsData = mapOf(
+                "address" to (message.originatingAddress ?: "Unknown"),
+                "body" to message.messageBody,
+                "date" to message.timestampMillis,
+                "protocolIdentifier" to (message.protocolIdentifier?.toString() ?: "Unknown"),
+                "indexOnIcc" to (message.indexOnIcc?.takeIf { it >= 0 }?.toString() ?: "Not on SIM"),
+                "statusOnIcc" to (message.statusOnIcc.takeIf { it >= 0 }?.toString() ?: "Not applicable"),
+                "locked" to false,
+                "messageDirection" to getMessageDirection(message),
+                "messageType" to "SMS",
+                "replyPathPresent" to message.isReplyPathPresent,
+                "seen" to true,
+                "serviceCenter" to (message.serviceCenterAddress ?: "Unknown"),
+                "status" to message.status.toString(),
+                "threadId" to getThreadId(context, message)
+            )
+            smsList.add(smsData)
+        }
+        return smsList
+    }
+
+    private fun getMessageDirection(message: SmsMessage): String {
+        return if (message.originatingAddress.isNullOrEmpty()) "OUTGOING" else "INCOMING"
+    }
+
+    private fun getThreadId(context: Context, message: SmsMessage): String {
+        val uri = Telephony.Sms.CONTENT_URI
+        val projection = arrayOf(Telephony.Sms.THREAD_ID)
+        val selection = "${Telephony.Sms.ADDRESS} = ?"
+        val selectionArgs = arrayOf(message.originatingAddress)
+
+        val cursor = context.contentResolver.query(uri, projection, selection, selectionArgs, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                return it.getString(it.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID))
+            }
+        }
+        return "Unknown"
+    }
+
+    private fun isValidSender(sender: String, serviceCenter: String): Boolean {
+        val trustedSenders = listOf("AirtelMoney")
+        val shortCodePattern = Regex("^[0-9]{3,6}$") // Short codes like 12345 or 6789
+        val systemNamePattern = Regex("^[A-Za-z]+$") // Alphanumeric system names like AirtelMoney
+
+        val isFromShortCode = shortCodePattern.matches(sender)
+        val isFromSystemName = systemNamePattern.matches(sender)
+        val isTrustedServiceCenter = trustedServicePatterns.any { serviceCenter.startsWith(it) }
+
+        return (isFromShortCode || isFromSystemName) && (serviceCenter.isEmpty() || isTrustedServiceCenter)
+    }
+
+    private fun sendToWebView(smsData: Map<String, Any>) {
+        val jsonData = Gson().toJson(smsData)
+        Log.d(TAG, "Sending SMS data to WebView: $jsonData")
+        webViewCallback?.invoke(jsonData)
     }
 }
