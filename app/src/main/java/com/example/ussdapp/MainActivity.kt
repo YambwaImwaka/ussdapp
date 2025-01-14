@@ -107,7 +107,7 @@ class MainActivity : ComponentActivity() {
             val subscriptionId = (data["simSlot"] as Double).toInt()
 
             var intent = Intent(Intent.ACTION_CALL).apply {
-                data = Uri.parse("tel:${ussdCode.replace("#", Uri.encode("#"))}")
+                this.data = Uri.parse("tel:${ussdCode.replace("#", Uri.encode("#"))}")
                 putExtra("android.telecom.extra.PHONE_ACCOUNT_HANDLE", subscriptionId)
             }
 
