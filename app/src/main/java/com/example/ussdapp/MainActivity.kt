@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -31,7 +32,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Initialize Firebase
-        Log.d("MainActivity", "Initializing Firebase")
         FirebaseApp.initializeApp(this)
         firestore = FirebaseFirestore.getInstance()
 
@@ -41,14 +41,15 @@ class MainActivity : ComponentActivity() {
         // Initialize WebView
         setupWebView()
 
-        // Initialize and register the SMS receiver
-        smsReceiver = SmsReceiver { data ->
-            // Handle SMS data and send to WebView
-            runOnUiThread {
-                webView?.evaluateJavascript("onSMSReceived('$data')", null)
+        // Register SMS Receiver if permissions are granted
+        if (hasSMSPermissions()) {
+            smsReceiver = SmsReceiver { smsJson ->
+                runOnUiThread {
+                    webView?.evaluateJavascript("onSmsReceived('$smsJson')", null)
+                }
             }
+            registerReceiver(smsReceiver, IntentFilter("android.provider.Telephony.SMS_RECEIVED"))
         }
-        registerReceiver(smsReceiver, IntentFilter("android.provider.Telephony.SMS_RECEIVED"))
     }
 
     private fun setupWebView() {
@@ -59,54 +60,90 @@ class MainActivity : ComponentActivity() {
             webViewClient = WebViewClient()
             webChromeClient = WebChromeClient()
 
-            addJavascriptInterface(this@MainActivity, "android")
+            addJavascriptInterface(object {
+                @JavascriptInterface
+                fun fetchSIMSlots() {
+                    fetchSimSlots()
+                }
+
+                @JavascriptInterface
+                fun fetchSmsOnDemand() {
+                    val smsList = smsReceiver.fetchSmsOnDemand(this@MainActivity)
+                    smsList?.forEach { sms ->
+                        webView?.evaluateJavascript("onSmsReceived('${Gson().toJson(sms)}')", null)
+                    }
+                }
+
+                @JavascriptInterface
+                fun sendDebugDataToFirestore() {
+                    val debugData = mapOf(
+                        "status" to "DEBUG",
+                        "amount" to "100.00",
+                        "message" to "Debugging Firestore",
+                        "timestamp" to System.currentTimeMillis()
+                    )
+                    sendToFirestore(debugData)
+                }
+
+                @JavascriptInterface
+                fun updateTrustedServicePatterns(patternsJson: String) {
+                    val patterns = Gson().fromJson(patternsJson, Array<String>::class.java).toList()
+                    smsReceiver.updateTrustedServicePatterns(patterns)
+                }
+
+                @JavascriptInterface
+                fun dialThis(payload: String) {
+                    dialUSSD(payload)
+                }
+            }, "AndroidInterface")
+
             loadUrl("file:///android_asset/index.html")
         }
         setContentView(webView)
     }
 
-    @JavascriptInterface
-    fun fetchSIMSlots() {
+    private fun fetchSimSlots() {
         try {
             val subscriptionManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
-            val activeSubscriptionInfoList = subscriptionManager.activeSubscriptionInfoList ?: emptyList()
+            val activeSubscriptions = subscriptionManager.activeSubscriptionInfoList ?: emptyList()
+            val simSlots = activeSubscriptions.associate { it.simSlotIndex to it.displayName.toString() }
 
-            if (activeSubscriptionInfoList.isNotEmpty()) {
-                val simSlots = activeSubscriptionInfoList.associate { it.simSlotIndex to it.displayName.toString() }
-                val jsonResult = Gson().toJson(simSlots)
-                Log.d("SIM Slots", "Fetched SIM Slots: $jsonResult")
-                runOnUiThread {
-                    webView?.evaluateJavascript("populateSIMSlots('$jsonResult')", null)
-                }
-            } else {
-                runOnUiThread {
-                    webView?.evaluateJavascript("populateSIMSlots('{}')", null)
-                }
+            val jsonResult = Gson().toJson(simSlots)
+            runOnUiThread {
+                webView?.evaluateJavascript("populateSIMSlots('$jsonResult')", null)
             }
         } catch (e: Exception) {
-            Log.e("SIM Slots", "Error fetching SIM slots: ${e.message}")
-        }
-    }
-
-    @JavascriptInterface
-    fun fetchStoredSMS() {
-        val smsList = smsReceiver.fetchSmsOnDemand(this)
-        if (smsList != null) {
-            val jsonResult = Gson().toJson(smsList)
-            Log.d("SMS", "Fetched SMS: $jsonResult")
+            Log.e("MainActivity", "Error fetching SIM slots: ${e.message}")
             runOnUiThread {
-                webView?.evaluateJavascript("displayFetchedSMS('$jsonResult')", null)
+                webView?.evaluateJavascript("populateSIMSlots('{}')", null)
             }
         }
     }
 
-    @JavascriptInterface
-    fun dialThis(payload: String) {
+    private fun sendToFirestore(data: Map<String, Any>) {
+        firestore.collection("transactions")
+            .add(data)
+            .addOnSuccessListener {
+                Log.d("Firestore", "Data successfully sent: $data")
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Failed to send data: ${e.message}")
+            }
+    }
+
+    private fun dialUSSD(payload: String) {
         try {
             val data = Gson().fromJson(payload, Map::class.java)
             val ussdCode = data["ussdCode"] as String
-            val encodedUssdCode = ussdCode.replace("#", Uri.encode("#"))
-            val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$encodedUssdCode"))
+            val simSlot = data["simSlot"] as String
+
+            val intent = Intent(Intent.ACTION_CALL).apply {
+                data = Uri.parse("tel:${ussdCode.replace("#", Uri.encode("#"))}")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    putExtra("com.android.phone.extra.slot", simSlot.toInt())
+                }
+            }
+
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
                 startActivity(intent)
             } else {
@@ -117,55 +154,39 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @JavascriptInterface
-    fun sendDebugData() {
-        val debugData = mapOf(
-            "sender" to "DebugSender",
-            "message" to "This is a test debug message",
-            "date" to System.currentTimeMillis()
-        )
-
-        firestore.collection("transactions")
-            .add(debugData)
-            .addOnSuccessListener {
-                runOnUiThread {
-                    Toast.makeText(this, "Debug data sent to Firestore.", Toast.LENGTH_SHORT).show()
-                }
-                Log.d("Firestore", "Debug data sent: $debugData")
-            }
-            .addOnFailureListener { e ->
-                runOnUiThread {
-                    Toast.makeText(this, "Failed to send debug data.", Toast.LENGTH_SHORT).show()
-                }
-                Log.e("Firestore", "Error sending debug data: ${e.message}")
-            }
-    }
-
     private fun checkAndRequestPermissions() {
-        val permissionsNeeded = mutableListOf<String>()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(Manifest.permission.RECEIVE_SMS)
+        val permissionsNeeded = listOf(
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.READ_SMS,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_PHONE_STATE
+        ).filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(Manifest.permission.READ_SMS)
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(Manifest.permission.READ_PHONE_STATE)
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(Manifest.permission.CALL_PHONE)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
+
         if (permissionsNeeded.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, permissionsNeeded.toTypedArray(), REQUEST_PERMISSIONS)
         }
     }
 
+    private fun hasSMSPermissions(): Boolean {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(smsReceiver)
+        if (::smsReceiver.isInitialized) {
+            unregisterReceiver(smsReceiver)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_PERMISSIONS && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+            Toast.makeText(this, "Permissions granted", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Permissions denied", Toast.LENGTH_SHORT).show()
+        }
     }
 }
