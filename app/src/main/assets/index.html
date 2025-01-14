@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>USSD Payment</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USSD Payment System</title>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -112,7 +114,7 @@
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", function () {
             if (window.android && android.fetchSIMSlots) {
                 android.fetchSIMSlots();
             } else {
@@ -121,7 +123,7 @@
         });
 
         function populateSIMSlots(json) {
-            console.log("Received JSON from Android:", json);
+            console.log("Received SIM slots JSON from Android:", json);
             try {
                 const slots = JSON.parse(json);
                 const select = document.getElementById("simSlots");
@@ -143,6 +145,7 @@
                     select.add(option);
                 });
             } catch (error) {
+                console.error("Error populating SIM slots:", error);
                 alert("Error populating SIM slots: " + error.message);
             }
         }
@@ -193,6 +196,7 @@
                 logEntry.textContent = message;
                 logDiv.appendChild(logEntry);
             } catch (error) {
+                console.error("Error displaying SMS:", error);
                 alert("Error displaying SMS: " + error.message);
             }
         }
@@ -220,6 +224,7 @@
                     logDiv.appendChild(logEntry);
                 });
             } catch (error) {
+                console.error("Error displaying fetched SMS:", error);
                 alert("Error displaying fetched SMS: " + error.message);
             }
         }
