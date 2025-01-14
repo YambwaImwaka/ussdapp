@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>USSD Payment</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 20px;
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1, h2 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+            color: #555;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .secondary-button {
+            background-color: #2196F3;
+            margin-top: -10px;
+        }
+
+        button.secondary-button:hover {
+            background-color: #0b7dda;
+        }
+
+        .transaction-log {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+
+        .log-entry {
+            border-bottom: 1px solid #eee;
+            padding: 10px 0;
+            color: #555;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>USSD Payment System</h1>
+        
+        <!-- SIM Slot Selection -->
+        <label for="simSlots">Choose SIM:</label>
+        <select id="simSlots"></select>
+        
+        <!-- Payment Inputs -->
+        <label for="amount">Amount:</label>
+        <input type="number" id="amount" placeholder="Enter payment amount" />
+        
+        <label for="merchantCode">Merchant Code:</label>
+        <input type="text" id="merchantCode" placeholder="Enter merchant code (e.g., 12345)" />
+        
+        <!-- Action Buttons -->
+        <button onclick="initiatePayment()">Pay Now</button>
+        <button class="secondary-button" onclick="fetchStoredSMS()">Fetch Stored SMS</button>
+        
+        <!-- Transaction Log -->
+        <h2>Transaction Log</h2>
+        <div class="transaction-log" id="transactionLog"></div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (window.android && android.fetchSIMSlots) {
+                android.fetchSIMSlots();
+            } else {
+                alert("Android interface not available.");
+            }
+        });
+
+        function populateSIMSlots(json) {
+            console.log("Received JSON from Android:", json);
+            try {
+                const slots = JSON.parse(json);
+                const select = document.getElementById("simSlots");
+                select.innerHTML = ""; // Clear existing options
+
+                if (Object.keys(slots).length === 0) {
+                    const option = document.createElement("option");
+                    option.text = "No active SIMs available";
+                    option.disabled = true;
+                    option.selected = true;
+                    select.add(option);
+                    return;
+                }
+
+                Object.entries(slots).forEach(([index, name]) => {
+                    const option = document.createElement("option");
+                    option.value = index;
+                    option.text = name;
+                    select.add(option);
+                });
+            } catch (error) {
+                alert("Error populating SIM slots: " + error.message);
+            }
+        }
+
+        function initiatePayment() {
+            const simSlot = document.getElementById("simSlots").value;
+            const amount = document.getElementById("amount").value;
+            const merchantCode = document.getElementById("merchantCode").value;
+
+            if (!simSlot) {
+                alert("Please select a SIM slot.");
+                return;
+            }
+            if (!amount || amount <= 0) {
+                alert("Please enter a valid payment amount.");
+                return;
+            }
+            if (!merchantCode) {
+                alert("Please enter a valid merchant code.");
+                return;
+            }
+
+            const payload = JSON.stringify({
+                simSlot,
+                ussdCode: `*115*8*${merchantCode}*${amount}#`
+            });
+
+            console.log("Sending payment payload to Android:", payload);
+
+            if (window.android && android.dialThis) {
+                android.dialThis(payload);
+            } else {
+                alert("Android interface not available.");
+            }
+        }
+
+        function onSMSReceived(json) {
+            try {
+                console.log("Received SMS JSON from Android:", json);
+                const transaction = JSON.parse(json);
+                const message = transaction.status === "SUCCESS"
+                    ? `Transaction Successful! Amount: ${transaction.amount}, TID: ${transaction.transactionId}`
+                    : `Transaction Failed! Reason: ${transaction.reason}, TID: ${transaction.transactionId}`;
+
+                const logDiv = document.getElementById("transactionLog");
+                const logEntry = document.createElement("div");
+                logEntry.classList.add("log-entry");
+                logEntry.textContent = message;
+                logDiv.appendChild(logEntry);
+            } catch (error) {
+                alert("Error displaying SMS: " + error.message);
+            }
+        }
+
+        function fetchStoredSMS() {
+            console.log("Fetching stored SMS...");
+            if (window.android && android.fetchStoredSMS) {
+                android.fetchStoredSMS();
+            } else {
+                alert("Android interface not available.");
+            }
+        }
+
+        function displayFetchedSMS(json) {
+            try {
+                console.log("Displaying fetched SMS JSON:", json);
+                const messages = JSON.parse(json);
+                const logDiv = document.getElementById("transactionLog");
+                logDiv.innerHTML = ""; // Clear existing logs
+
+                messages.forEach((message) => {
+                    const logEntry = document.createElement("div");
+                    logEntry.classList.add("log-entry");
+                    logEntry.textContent = `TID: ${message.transactionId}, Amount: ${message.amount}, Status: ${message.status}`;
+                    logDiv.appendChild(logEntry);
+                });
+            } catch (error) {
+                alert("Error displaying fetched SMS: " + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

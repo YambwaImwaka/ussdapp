@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "141024946853",
+    "project_id": "ussdappone",
+    "storage_bucket": "ussdappone.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:141024946853:android:0843f18ff1fd189d88bb4c",
+        "android_client_info": {
+          "package_name": "com.techtonic.ussdapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBeL7J4-6fl_Zz_u9H-GJ80irpfZWGSdZ4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

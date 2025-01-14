@@ -1,0 +1,24 @@
+workflows:
+  native-android:
+    name: Native Android Build Workflow
+    max_build_duration: 120  # Optional, to limit the build duration
+    instance_type: mac_mini_m2  # Choose the appropriate instance type
+    environment:
+      vars:
+        PACKAGE_NAME: "com.techtonic.ussdapp"  # Replace with your package name
+    scripts:
+      - name: Set Android SDK location
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      - name: Set executable permission for gradlew
+        script: |
+          chmod +x ./gradlew
+      - name: Build APK debug
+        script: |
+          # Run Gradle task to build the debug APK
+          ./gradlew clean assembleDebug --stacktrace
+      - name: List APK outputs
+        script: |
+          ls -l app/build/outputs/apk/debug/
+    artifacts:
+      - app/build/outputs/apk/debug/app-debug.apk  # APK location after building
