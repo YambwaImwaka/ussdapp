@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 class MainActivity : ComponentActivity() {
 
@@ -101,7 +102,7 @@ class MainActivity : ComponentActivity() {
     @JavascriptInterface
     fun dialThis(payload: String) {
         try {
-            val data = Gson().fromJson<Map<String, Any>>(payload)
+            val data: Map<String, Any> = Gson().fromJson(payload, object : TypeToken<Map<String, Any>>() {}.type)
             val ussdCode = data["ussdCode"] as String
             val subscriptionId = (data["simSlot"] as Double).toInt()
 
