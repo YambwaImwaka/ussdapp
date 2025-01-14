@@ -114,15 +114,16 @@ class MainActivity : ComponentActivity() {
 
             // Extract USSD code and SIM slot
             val ussdCode = data["ussdCode"] as String
-            val subscriptionId = (data["simSlot"] as Double).toInt()
+            val subscriptionId = (data["simSlot"] as Double).toInt() // Convert to Int
+
+            // Encode the USSD code properly
+            val encodedUssdCode = Uri.encode(ussdCode)
 
             // Create the intent for dialing the USSD code
-            val encodedUssdCode = Uri.encode("#") // Encodes '#' properly for USSD
-            val ussdUri = Uri.parse("tel:${ussdCode.replace("#", encodedUssdCode)}")
-
+            val ussdUri = Uri.parse("tel:$encodedUssdCode") // Use encoded USSD code
             val intent = Intent(Intent.ACTION_CALL).apply {
-                data = ussdUri // Use 'ussdUri' for the Uri data
-                putExtra("android.telecom.extra.PHONE_ACCOUNT_HANDLE", subscriptionId)
+                data = ussdUri // Assign the encoded URI
+                putExtra("android.telecom.extra.SUBSCRIPTION_ID", subscriptionId) // Use the subscription ID
             }
 
             // Check CALL_PHONE permission
