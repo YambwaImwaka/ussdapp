@@ -101,11 +101,11 @@ class MainActivity : ComponentActivity() {
     @JavascriptInterface
     fun dialThis(payload: String) {
         try {
-            val data = Gson().fromJson(payload, Map::class.java)
+            val data = Gson().fromJson<Map<String, Any>>(payload)
             val ussdCode = data["ussdCode"] as String
             val subscriptionId = (data["simSlot"] as Double).toInt()
 
-            val intent = Intent(Intent.ACTION_CALL).apply {
+            var intent = Intent(Intent.ACTION_CALL).apply {
                 data = Uri.parse("tel:${ussdCode.replace("#", Uri.encode("#"))}")
                 putExtra("android.telecom.extra.PHONE_ACCOUNT_HANDLE", subscriptionId)
             }

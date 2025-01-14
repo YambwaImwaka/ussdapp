@@ -19,7 +19,7 @@ class SmsReceiver(private val webView: WebView? = null, private val firestore: F
             val bundle = intent.extras
             val pdus = bundle?.get("pdus") as? Array<*> ?: return
             for (pdu in pdus) {
-                val sms = SmsMessage.createFromPdu(pdu as ByteArray, Telephony.Sms.MessageClass.ALL)
+                val sms = SmsMessage.createFromPdu(pdu as ByteArray)
                 val messageBody = sms.messageBody
                 val sender = sms.originatingAddress
 
