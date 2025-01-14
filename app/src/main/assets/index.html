@@ -1,9 +1,7 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>USSD Payment System</title>
+    <title>USSD Payment</title>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -62,7 +60,6 @@
 
         .secondary-button {
             background-color: #2196F3;
-            margin-top: -10px;
         }
 
         button.secondary-button:hover {
@@ -122,8 +119,12 @@
             }
         });
 
+        /**
+         * Populates the SIM slots dropdown with data from the Android interface.
+         * @param {string} json - JSON string containing SIM slot details.
+         */
         function populateSIMSlots(json) {
-            console.log("Received SIM slots JSON from Android:", json);
+            console.log("Received SIM slots JSON:", json);
             try {
                 const slots = JSON.parse(json);
                 const select = document.getElementById("simSlots");
@@ -150,6 +151,9 @@
             }
         }
 
+        /**
+         * Validates input fields and initiates a USSD payment through the Android interface.
+         */
         function initiatePayment() {
             const simSlot = document.getElementById("simSlots").value;
             const amount = document.getElementById("amount").value;
@@ -182,42 +186,18 @@
             }
         }
 
-        function onSMSReceived(json) {
-            try {
-                console.log("Received SMS JSON from Android:", json);
-                const transaction = JSON.parse(json);
-                const message = transaction.status === "SUCCESS"
-                    ? `Transaction Successful! Amount: ${transaction.amount}, TID: ${transaction.transactionId}`
-                    : `Transaction Failed! Reason: ${transaction.reason}, TID: ${transaction.transactionId}`;
-
-                const logDiv = document.getElementById("transactionLog");
-                const logEntry = document.createElement("div");
-                logEntry.classList.add("log-entry");
-                logEntry.textContent = message;
-                logDiv.appendChild(logEntry);
-            } catch (error) {
-                console.error("Error displaying SMS:", error);
-                alert("Error displaying SMS: " + error.message);
-            }
-        }
-
-        function fetchStoredSMS() {
-            console.log("Fetching stored SMS...");
-            if (window.android && android.fetchStoredSMS) {
-                android.fetchStoredSMS();
-            } else {
-                alert("Android interface not available.");
-            }
-        }
-
+        /**
+         * Displays the fetched SMS messages.
+         * @param {string} json - JSON string containing SMS data.
+         */
         function displayFetchedSMS(json) {
+            console.log("Displaying fetched SMS JSON:", json);
             try {
-                console.log("Displaying fetched SMS JSON:", json);
                 const messages = JSON.parse(json);
                 const logDiv = document.getElementById("transactionLog");
                 logDiv.innerHTML = ""; // Clear existing logs
 
-                messages.forEach((message) => {
+                messages.forEach(message => {
                     const logEntry = document.createElement("div");
                     logEntry.classList.add("log-entry");
                     logEntry.textContent = `TID: ${message.transactionId}, Amount: ${message.amount}, Status: ${message.status}`;
@@ -226,6 +206,18 @@
             } catch (error) {
                 console.error("Error displaying fetched SMS:", error);
                 alert("Error displaying fetched SMS: " + error.message);
+            }
+        }
+
+        /**
+         * Fetches stored SMS messages through the Android interface.
+         */
+        function fetchStoredSMS() {
+            console.log("Fetching stored SMS...");
+            if (window.android && android.fetchStoredSMS) {
+                android.fetchStoredSMS();
+            } else {
+                alert("Android interface not available.");
             }
         }
     </script>
