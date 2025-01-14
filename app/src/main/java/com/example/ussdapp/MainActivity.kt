@@ -109,15 +109,23 @@ class MainActivity : ComponentActivity() {
     @JavascriptInterface
     fun dialThis(payload: String) {
         try {
+            // Deserialize the JSON payload to a Map
             val data: Map<String, Any> = Gson().fromJson(payload, object : TypeToken<Map<String, Any>>() {}.type)
+
+            // Extract USSD code and SIM slot
             val ussdCode = data["ussdCode"] as String
             val subscriptionId = (data["simSlot"] as Double).toInt()
 
+            // Create the intent for dialing the USSD code
+            val encodedUssdCode = Uri.encode("#") // Encodes '#' properly for USSD
+            val ussdUri = Uri.parse("tel:${ussdCode.replace("#", encodedUssdCode)}")
+
             val intent = Intent(Intent.ACTION_CALL).apply {
-                data = Uri.parse("tel:${ussdCode.replace("#", Uri.encode("#"))}")
+                data = ussdUri // Use 'ussdUri' for the Uri data
                 putExtra("android.telecom.extra.PHONE_ACCOUNT_HANDLE", subscriptionId)
             }
 
+            // Check CALL_PHONE permission
             if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
                 startActivity(intent)
             } else {
