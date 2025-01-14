@@ -118,10 +118,10 @@ class MainActivity : ComponentActivity() {
                 putExtra("android.telecom.extra.PHONE_ACCOUNT_HANDLE", subscriptionId)
             }
 
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
                 startActivity(intent)
             } else {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
+                ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error dialing USSD: ${e.message}")
