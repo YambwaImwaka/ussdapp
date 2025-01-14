@@ -66,6 +66,13 @@ class MainActivity : ComponentActivity() {
     fun fetchSIMSlots() {
         Log.d("MainActivity", "fetchSIMSlots called")
         try {
+            // Check for permission
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+                Log.e("MainActivity", "Permission READ_PHONE_STATE not granted")
+                webView?.evaluateJavascript("populateSIMSlots('{}')", null)
+                return
+            }
+
             val subscriptionManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
             val activeSubscriptions = subscriptionManager.activeSubscriptionInfoList ?: emptyList()
 
@@ -106,8 +113,8 @@ class MainActivity : ComponentActivity() {
             val ussdCode = data["ussdCode"] as String
             val subscriptionId = (data["simSlot"] as Double).toInt()
 
-            var intent = Intent(Intent.ACTION_CALL).apply {
-                this.data = Uri.parse("tel:${ussdCode.replace("#", Uri.encode("#"))}")
+            val intent = Intent(Intent.ACTION_CALL).apply {
+                data = Uri.parse("tel:${ussdCode.replace("#", Uri.encode("#"))}")
                 putExtra("android.telecom.extra.PHONE_ACCOUNT_HANDLE", subscriptionId)
             }
 
@@ -143,8 +150,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_PERMISSIONS && grantResults.any { it != PackageManager.PERMISSION_GRANTED }) {
-            Toast.makeText(this, "Permissions are required for app functionality", Toast.LENGTH_LONG).show()
+        if (requestCode == REQUEST_PERMISSIONS) {
+            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                Log.d("MainActivity", "All permissions granted")
+            } else {
+                Toast.makeText(this, "Permissions are required for app functionality", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
