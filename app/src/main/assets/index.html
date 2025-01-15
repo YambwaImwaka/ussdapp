@@ -178,8 +178,8 @@
         }
 
         function fetchStoredSMS() {
-            if (window.AndroidInterface && window.AndroidInterface.fetchSmsOnDemand) {
-                window.AndroidInterface.fetchSmsOnDemand();
+            if (window.AndroidInterface && window.AndroidInterface.fetchStoredSMS) {
+                window.AndroidInterface.fetchStoredSMS();
             } else {
                 console.error("AndroidInterface or fetchSmsOnDemand method not available.");
             }
