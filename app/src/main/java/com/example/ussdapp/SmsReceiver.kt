@@ -20,6 +20,9 @@ class SmsReceiver(
     private val firestore = FirebaseFirestore.getInstance()
     private var trustedServicePatterns: List<String> = emptyList()
 
+    /**
+     * Updates the list of trusted service patterns for validation.
+     */
     fun updateTrustedServicePatterns(patterns: List<String>) {
         trustedServicePatterns = patterns
         Log.d(TAG, "Updated trusted service patterns: $patterns")
@@ -31,25 +34,34 @@ class SmsReceiver(
             return
         }
 
-        val smsList = extractMessages(context, intent) ?: return
+        val smsList = extractMessages(intent) ?: return
         for (sms in smsList) {
-            if (isValidSender(sms["address"] ?: "", sms["serviceCenter"] ?: "")) {
+            if (isValidSender(sms["address"] as String, sms["serviceCenter"] as String)) {
                 sendToFirestore(context, sms)
                 sendToWebView(sms)
             }
         }
     }
 
+    /**
+     * Checks if the app has the required permission.
+     */
     private fun hasPermission(context: Context, permission: String): Boolean {
         return ActivityCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
+    /**
+     * Requests the required permission with a toast message.
+     */
     private fun requestPermission(context: Context, permission: String) {
         Toast.makeText(context, "Permission is required to access SMS.", Toast.LENGTH_SHORT).show()
         Log.e(TAG, "Permission not granted for $permission.")
     }
 
-    private fun extractMessages(context: Context, intent: Intent): List<Map<String, Any>>? {
+    /**
+     * Extracts SMS messages from the received intent.
+     */
+    private fun extractMessages(intent: Intent): List<Map<String, Any>>? {
         val bundle = intent.extras ?: return null
         val pdus = bundle.get("pdus") as? Array<*> ?: return null
 
@@ -68,10 +80,16 @@ class SmsReceiver(
         return smsList
     }
 
+    /**
+     * Validates the sender based on trusted service patterns.
+     */
     private fun isValidSender(sender: String, serviceCenter: String): Boolean {
         return trustedServicePatterns.any { pattern -> sender.contains(pattern, ignoreCase = true) }
     }
 
+    /**
+     * Sends SMS data to Firestore.
+     */
     private fun sendToFirestore(context: Context, smsData: Map<String, Any>) {
         firestore.collection("transactions")
             .add(smsData)
@@ -85,9 +103,57 @@ class SmsReceiver(
             }
     }
 
+    /**
+     * Sends SMS data to the WebView.
+     */
     private fun sendToWebView(smsData: Map<String, Any>) {
         val jsonData = Gson().toJson(smsData)
         Log.d(TAG, "Sending SMS data to WebView: $jsonData")
         webViewCallback?.invoke(jsonData)
+    }
+
+    /**
+     * Fetches all SMS messages on demand.
+     */
+    fun fetchStoredSMS(context: Context): List<Map<String, Any>>? {
+        if (!hasPermission(context, android.Manifest.permission.READ_SMS)) {
+            requestPermission(context, android.Manifest.permission.READ_SMS)
+            return null
+        }
+
+        val cursor: Cursor? = context.contentResolver.query(
+            Telephony.Sms.CONTENT_URI,
+            arrayOf(
+                Telephony.Sms.ADDRESS,
+                Telephony.Sms.BODY,
+                Telephony.Sms.DATE,
+                Telephony.Sms.SERVICE_CENTER
+            ),
+            null,
+            null,
+            Telephony.Sms.DEFAULT_SORT_ORDER
+        )
+
+        val smsList = mutableListOf<Map<String, Any>>()
+        cursor?.use {
+            while (it.moveToNext()) {
+                val address = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)) ?: "Unknown"
+                val body = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.BODY)) ?: ""
+                val date = it.getLong(it.getColumnIndexOrThrow(Telephony.Sms.DATE))
+                val serviceCenter = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.SERVICE_CENTER)) ?: "Unknown"
+
+                val smsData = mapOf(
+                    "address" to address,
+                    "body" to body,
+                    "date" to date,
+                    "serviceCenter" to serviceCenter
+                )
+
+                if (isValidSender(address, serviceCenter)) {
+                    smsList.add(smsData)
+                }
+            }
+        }
+        return smsList
     }
 }

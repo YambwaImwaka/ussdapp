@@ -67,8 +67,8 @@ class MainActivity : ComponentActivity() {
                 }
 
                 @JavascriptInterface
-                fun fetchSmsOnDemand() {
-                    val smsList = smsReceiver.fetchSmsOnDemand(this@MainActivity)
+                fun fetchStoredSMS() {
+                    val smsList = smsReceiver.fetchStoredSMS(this@MainActivity)
                     smsList?.forEach { sms ->
                         webView?.evaluateJavascript("onSmsReceived('${Gson().toJson(sms)}')", null)
                     }
@@ -134,8 +134,8 @@ class MainActivity : ComponentActivity() {
     private fun dialUSSD(payload: String) {
         try {
             val data = Gson().fromJson(payload, Map::class.java)
-            val ussdCode = data["ussdCode"] as String
-            val simSlot = data["simSlot"] as String
+            val ussdCode = data["ussdCode"] as? String ?: return
+            val simSlot = data["simSlot"] as? String ?: "0"
 
             val intent = Intent(Intent.ACTION_CALL).apply {
                 data = Uri.parse("tel:${ussdCode.replace("#", Uri.encode("#"))}")
