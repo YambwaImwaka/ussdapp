@@ -162,7 +162,7 @@ private fun dialUSSD(payload: String) {
     private fun checkAndRequestPermissions() {
         val permissionsNeeded = listOf(
             Manifest.permission.RECEIVE_SMS,
-            Manifest.permissio.POST_NOTIFICATION,
+            Manifest.permission.POST_NOTIFICATIONS,
             Manifest.permission.READ_SMS,
             Manifest.permission.CALL_PHONE,
             Manifest.permission.READ_PHONE_STATE
