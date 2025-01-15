@@ -4,103 +4,213 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>USSD Payment System</title>
-    <style>
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
+ <style>/* Global Styles */
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #F1F2F6; /* Very light gray-blue */
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    flex-direction: column;
+}
 
-        .container {
-            max-width: 600px;
-            background: #fff;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
+.container {
+    width: 100%;
+    max-width: 400px;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+    animation: fadeIn 0.6s ease-out;
+}
 
-        h1, h2 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 20px;
-        }
+/* Header */
+h1 {
+    text-align: center;
+    color: #333; /* Darker gray for a soft yet strong header */
+    font-size: 24px;
+    margin-bottom: 20px;
+    font-weight: 600;
+}
 
-        label {
-            font-weight: bold;
-            display: block;
-            margin-bottom: 5px;
-        }
+/* Form Input and Select Styles */
+label {
+    font-weight: 600;
+    color: #333;
+    display: block;
+    margin-bottom: 6px;
+}
 
-        input, select, button {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            box-sizing: border-box;
-            font-size: 16px;
-        }
+input, select, button {
+    width: 100%;
+    padding: 16px;
+    margin-bottom: 15px;
+    border: 1px solid #D1D8E0; /* Light gray for subtle contrast */
+    border-radius: 8px;
+    box-sizing: border-box;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
 
-        button {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
+input:focus, select:focus {
+    border-color: #45A29E; /* A calming greenish-blue for focus state */
+    outline: none;
+}
 
-        button:hover {
-            background-color: #45a049;
-        }
+/* Buttons with Gradient */
+button {
+    background: linear-gradient(135deg, #8E44AD, #4E73DF); /* Purple to blue gradient */
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.3s ease, transform 0.3s ease;
+    padding: 16px;
+    border-radius: 8px;
+}
 
-        .secondary-button {
-            background-color: #2196F3;
-            color: white;
-        }
+button:hover {
+    background: linear-gradient(135deg, #4E73DF, #8E44AD); /* Reversed gradient for hover */
+    transform: translateY(-3px);
+}
 
-        button.secondary-button:hover {
-            background-color: #0b7dda;
-        }
+.secondary-button {
+    background: linear-gradient(135deg, #FF6F61, #FF4C35); /* Warm red-orange gradient */
+    color: white;
+}
 
-        .transaction-log {
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 10px;
-            max-height: 300px;
-            overflow-y: auto;
-            background-color: #f9f9f9;
-        }
+.secondary-button:hover {
+    background: linear-gradient(135deg, #FF4C35, #FF6F61); /* Reversed gradient on hover */
+}
 
-        .log-entry {
-            border-bottom: 1px solid #eee;
-            padding: 10px 0;
-            color: #333;
-        }
+/* Loading Indicator */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
 
-        .log-entry:last-child {
-            border-bottom: none;
-        }
-    </style>
+.loading-spinner {
+    border: 8px solid #f3f3f3;
+    border-top: 8px solid #4E73DF; /* Blue spinner for consistency */
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 2s linear infinite;
+}
+
+/* Transaction Log */
+.transaction-log {
+    border: 1px solid #D1D8E0;
+    border-radius: 8px;
+    padding: 12px;
+    background-color: #F8F9FC; /* Very light blue-gray background for the log */
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 20px;
+}
+
+.log-entry {
+    padding: 12px;
+    background-color: #ffffff;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    border: 1px solid #D1D8E0;
+    opacity: 0;
+    animation: fadeInLog 0.5s ease-out forwards;
+}
+
+.log-entry:last-child {
+    margin-bottom: 0;
+}
+
+/* App Version */
+.version {
+    font-size: 12px;
+    color: #D1D8E0;
+    text-align: center;
+    margin-top: 20px;
+    opacity: 0.7;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInLog {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Flexbox Layout for Mobile */
+.container {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Make button larger for touch devices */
+button {
+    padding: 18px;
+    font-size: 18px;
+}
+
+.form-section input,
+.form-section select {
+    font-size: 18px;
+}</style>
 </head>
 <body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
     <div class="container">
         <h1>USSD Payment System</h1>
 
-        <!-- SIM Slot Selection -->
-        <label for="simSlots">Choose SIM:</label>
-        <select id="simSlots"></select>
+        <!-- Form Section -->
+        <div class="form-section">
+            <!-- SIM Slot Selection -->
+            <label for="simSlots">Choose SIM:</label>
+            <select id="simSlots"></select>
 
-        <!-- Payment Inputs -->
-        <label for="amount">Amount:</label>
-        <input type="number" id="amount" placeholder="Enter payment amount">
+            <!-- Payment Inputs -->
+            <label for="amount">Amount:</label>
+            <input type="number" id="amount" placeholder="Enter amount to Pay....." min="1" />
 
-        <label for="merchantCode">Merchant Code:</label>
-        <input type="text" id="merchantCode" placeholder="Enter merchant code (e.g., 12345)">
+            <label for="merchantCode">Merchant Code:</label>
+            <input type="text" id="merchantCode" placeholder="Enter merchant Code....." inputmode="numeric" pattern="[0-9]*" />
+        </div>
 
         <!-- Action Buttons -->
         <button onclick="initiatePayment()">Pay Now</button>
@@ -109,8 +219,14 @@
         <!-- Transaction Log -->
         <h2>Transaction Log</h2>
         <div class="transaction-log" id="transactionLog"></div>
-    </div>
 
+        <!-- App Version -->
+        <div class="version">
+            Version 1.0.1
+        </div>
+    </div>
+    
+  
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             console.log("DOM fully loaded and parsed.");
@@ -121,6 +237,15 @@
             } else {
                 console.error("AndroidInterface or fetchSIMSlots method not available.");
             }
+
+            // Fix keyboard focus issue on enter
+            const merchantCodeInput = document.getElementById('merchantCode');
+            merchantCodeInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    merchantCodeInput.blur();  // Hide the keyboard
+                }
+            });
         });
 
         function populateSIMSlots(json) {
@@ -150,6 +275,9 @@
         }
 
         function initiatePayment() {
+            // Show loading indicator
+            document.getElementById("loadingOverlay").style.display = 'flex';
+
             const simSlot = document.getElementById("simSlots").value;
             const amount = document.getElementById("amount").value;
             const merchantCode = document.getElementById("merchantCode").value;
@@ -177,15 +305,28 @@
             } else {
                 alert("Android interface not available.");
             }
+
+            // Hide loading indicator after operation completes (you can simulate completion for now)
+            setTimeout(function() {
+                document.getElementById("loadingOverlay").style.display = 'none';
+            }, 2000);  // Simulate a 2-second process time
         }
 
         function fetchStoredSMS() {
+            // Show loading indicator
+            document.getElementById("loadingOverlay").style.display = 'flex';
+
             if (window.AndroidInterface && window.AndroidInterface.fetchStoredSMS) {
                 console.log("Fetching SMS on demand...");
                 window.AndroidInterface.fetchStoredSMS();
             } else {
                 console.error("AndroidInterface or fetchStoredSMS method not available.");
             }
+
+            // Hide loading indicator after operation completes (you can simulate completion for now)
+            setTimeout(function() {
+                document.getElementById("loadingOverlay").style.display = 'none';
+            }, 2000);  // Simulate a 2-second process time
         }
 
         function onSmsReceived(json) {
