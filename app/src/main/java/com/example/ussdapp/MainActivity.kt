@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 class MainActivity : ComponentActivity() {
     private val REQUEST_PERMISSIONS = 101
@@ -134,7 +135,9 @@ class MainActivity : ComponentActivity() {
 private fun dialUSSD(payload: String) {
     try {
         // Parse payload into a Map<String, String>
-        val data: Map<String, String> = Gson().fromJson(payload, object : TypeToken<Map<String, String>>() {}.type)
+        val type = object : TypeToken<Map<String, String>>() {}.type
+        val data: Map<String, String> = Gson().fromJson(payload, type)
+
         val ussdCode = data["ussdCode"] ?: throw IllegalArgumentException("USSD code is missing")
         val simSlot = data["simSlot"]?.toIntOrNull() ?: throw IllegalArgumentException("Sim slot is invalid or missing")
 
@@ -146,7 +149,7 @@ private fun dialUSSD(payload: String) {
         val intent = Intent(Intent.ACTION_CALL).apply {
             data = ussdUri
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                putExtra("com.android.phone.extra.slot", simSlot) // Add SIM slot for dual SIM
+                putExtra("com.android.phone.extra.slot", simSlot)
             }
         }
 
@@ -157,7 +160,6 @@ private fun dialUSSD(payload: String) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
         }
     } catch (e: Exception) {
-        // Handle errors and log
         Log.e("MainActivity", "Error dialing USSD: ${e.message}")
         Toast.makeText(this, "Failed to dial USSD: ${e.message}", Toast.LENGTH_SHORT).show()
     }
