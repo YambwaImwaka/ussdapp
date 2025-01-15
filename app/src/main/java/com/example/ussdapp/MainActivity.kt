@@ -144,7 +144,7 @@ private fun dialUSSD(payload: String) {
 
         // Create the intent with the USSD code and SIM slot
         val intent = Intent(Intent.ACTION_CALL).apply {
-            data = ussdUri
+            data = ussdUri // Set the data property with the ussdUri
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 putExtra("com.android.phone.extra.slot", simSlot) // Add SIM slot for dual SIM
             }
