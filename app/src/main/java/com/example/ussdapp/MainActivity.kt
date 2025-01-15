@@ -134,7 +134,7 @@ class MainActivity : ComponentActivity() {
 private fun dialUSSD(payload: String) {
     try {
         // Parse payload into a Map<String, String>
-        val data = Gson().fromJson(payload, Map::class.java) as Map<String, String>
+        val data: Map<String, String> = Gson().fromJson(payload, object : TypeToken<Map<String, String>>() {}.type)
         val ussdCode = data["ussdCode"] ?: throw IllegalArgumentException("USSD code is missing")
         val simSlot = data["simSlot"]?.toIntOrNull() ?: throw IllegalArgumentException("Sim slot is invalid or missing")
 
@@ -144,7 +144,7 @@ private fun dialUSSD(payload: String) {
 
         // Create the intent with the USSD code and SIM slot
         val intent = Intent(Intent.ACTION_CALL).apply {
-            data = ussdUri // Set the data property with the ussdUri
+            data = ussdUri
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 putExtra("com.android.phone.extra.slot", simSlot) // Add SIM slot for dual SIM
             }
