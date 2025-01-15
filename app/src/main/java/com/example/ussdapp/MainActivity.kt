@@ -131,26 +131,33 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    private fun dialUSSD(payload: String) {
+private fun dialUSSD(payload: String) {
     try {
+        // Parse payload into a Map<String, String>
         val data = Gson().fromJson(payload, Map::class.java) as Map<String, String>
         val ussdCode = data["ussdCode"] ?: throw IllegalArgumentException("USSD code is missing")
         val simSlot = data["simSlot"]?.toIntOrNull() ?: throw IllegalArgumentException("Sim slot is invalid or missing")
 
+        // Properly encode the USSD code
         val encodedUssdCode = ussdCode.replace("#", Uri.encode("#"))
+        val ussdUri = Uri.parse("tel:$encodedUssdCode")
+
+        // Create the intent with the USSD code and SIM slot
         val intent = Intent(Intent.ACTION_CALL).apply {
-            data = Uri.parse("tel:$encodedUssdCode")
+            data = ussdUri
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                putExtra("com.android.phone.extra.slot", simSlot) // Set the SIM slot
+                putExtra("com.android.phone.extra.slot", simSlot) // Add SIM slot for dual SIM
             }
         }
 
+        // Check permission and start the call
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
             startActivity(intent)
         } else {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
         }
     } catch (e: Exception) {
+        // Handle errors and log
         Log.e("MainActivity", "Error dialing USSD: ${e.message}")
         Toast.makeText(this, "Failed to dial USSD: ${e.message}", Toast.LENGTH_SHORT).show()
     }
