@@ -77,17 +77,6 @@ class MainActivity : ComponentActivity() {
                 }
 
                 @JavascriptInterface
-                fun sendDebugDataToFirestore() {
-                    val debugData = mapOf(
-                        "status" to "DEBUG",
-                        "amount" to "100.00",
-                        "message" to "Debugging Firestore",
-                        "timestamp" to System.currentTimeMillis()
-                    )
-                    sendToFirestore(debugData)
-                }
-
-                @JavascriptInterface
                 fun updateTrustedServicePatterns(patternsJson: String) {
                     val patterns = Gson().fromJson(patternsJson, Array<String>::class.java).toList()
                     smsReceiver.updateTrustedServicePatterns(patterns)

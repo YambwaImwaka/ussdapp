@@ -79,6 +79,7 @@
         .log-entry {
             border-bottom: 1px solid #eee;
             padding: 10px 0;
+            color: #333;
         }
 
         .log-entry:last-child {
@@ -103,8 +104,7 @@
 
         <!-- Action Buttons -->
         <button onclick="initiatePayment()">Pay Now</button>
-        <button class="secondary-button" onclick="fetchStoredSMS()">Fetch Stored SMS</button>
-        <button class="secondary-button" onclick="sendDebugData()">Send Debug Data</button>
+        <button class="secondary-button" onclick="fetchStoredSMS()">Fetch SMS</button>
 
         <!-- Transaction Log -->
         <h2>Transaction Log</h2>
@@ -113,6 +113,8 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
+            console.log("DOM fully loaded and parsed.");
+
             // Fetch SIM slots on page load
             if (window.AndroidInterface && window.AndroidInterface.fetchSIMSlots) {
                 window.AndroidInterface.fetchSIMSlots();
@@ -179,17 +181,10 @@
 
         function fetchStoredSMS() {
             if (window.AndroidInterface && window.AndroidInterface.fetchStoredSMS) {
+                console.log("Fetching SMS on demand...");
                 window.AndroidInterface.fetchStoredSMS();
             } else {
-                console.error("AndroidInterface or fetchSmsOnDemand method not available.");
-            }
-        }
-
-        function sendDebugData() {
-            if (window.AndroidInterface && window.AndroidInterface.sendDebugDataToFirestore) {
-                window.AndroidInterface.sendDebugDataToFirestore();
-            } else {
-                console.error("AndroidInterface or sendDebugDataToFirestore method not available.");
+                console.error("AndroidInterface or fetchStoredSMS method not available.");
             }
         }
 
@@ -204,6 +199,11 @@
             } catch (error) {
                 console.error("Error parsing received SMS JSON:", error);
             }
+        }
+
+        // Register a global handler for receiving SMS from Kotlin
+        if (!window.onSmsReceived) {
+            window.onSmsReceived = onSmsReceived;
         }
     </script>
 </body>

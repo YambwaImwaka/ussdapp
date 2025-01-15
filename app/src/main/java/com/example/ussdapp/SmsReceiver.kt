@@ -30,15 +30,17 @@ class SmsReceiver(
 
     override fun onReceive(context: Context, intent: Intent) {
         if (!hasPermission(context, android.Manifest.permission.READ_SMS)) {
-            requestPermission(context, android.Manifest.permission.READ_SMS)
+            Log.e(TAG, "Permission to read SMS not granted.")
             return
         }
 
-        val smsList = extractMessages(intent) ?: return
-        for (sms in smsList) {
+        val smsList = extractMessages(intent)
+        smsList?.forEach { sms ->
             if (isValidSender(sms["address"] as String, sms["serviceCenter"] as String)) {
                 sendToFirestore(context, sms)
                 sendToWebView(sms)
+            } else {
+                Log.d(TAG, "Ignored SMS from untrusted sender: ${sms["address"]}")
             }
         }
     }
@@ -51,40 +53,32 @@ class SmsReceiver(
     }
 
     /**
-     * Requests the required permission with a toast message.
-     */
-    private fun requestPermission(context: Context, permission: String) {
-        Toast.makeText(context, "Permission is required to access SMS.", Toast.LENGTH_SHORT).show()
-        Log.e(TAG, "Permission not granted for $permission.")
-    }
-
-    /**
      * Extracts SMS messages from the received intent.
      */
     private fun extractMessages(intent: Intent): List<Map<String, Any>>? {
         val bundle = intent.extras ?: return null
         val pdus = bundle.get("pdus") as? Array<*> ?: return null
 
-        val smsList = mutableListOf<Map<String, Any>>()
-        for (pdu in pdus) {
+        return pdus.mapNotNull { pdu ->
             val message = SmsMessage.createFromPdu(pdu as ByteArray, bundle.getString("format"))
-            val smsData = mapOf(
+            mapOf(
                 "address" to (message.originatingAddress ?: "Unknown"),
                 "body" to message.messageBody,
                 "date" to message.timestampMillis,
                 "serviceCenter" to (message.serviceCenterAddress ?: "Unknown"),
                 "status" to message.status.toString()
             )
-            smsList.add(smsData)
         }
-        return smsList
     }
 
     /**
      * Validates the sender based on trusted service patterns.
      */
     private fun isValidSender(sender: String, serviceCenter: String): Boolean {
-        return trustedServicePatterns.any { pattern -> sender.contains(pattern, ignoreCase = true) }
+        val isTrustedSender = trustedServicePatterns.any { pattern ->
+            sender.contains(pattern, ignoreCase = true)
+        }
+        return isTrustedSender || serviceCenter.isNotBlank()
     }
 
     /**
@@ -94,12 +88,12 @@ class SmsReceiver(
         firestore.collection("transactions")
             .add(smsData)
             .addOnSuccessListener {
-                Toast.makeText(context, "SMS saved to Firestore.", Toast.LENGTH_SHORT).show()
                 Log.d(TAG, "SMS saved to Firestore: $smsData")
+                Toast.makeText(context, "SMS saved to Firestore.", Toast.LENGTH_SHORT).show()
             }
             .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to save SMS to Firestore: ${e.message}")
                 Toast.makeText(context, "Failed to save SMS to Firestore.", Toast.LENGTH_SHORT).show()
-                Log.e(TAG, "Failed to save SMS: $e")
             }
     }
 
@@ -113,12 +107,12 @@ class SmsReceiver(
     }
 
     /**
-     * Fetches all SMS messages on demand.
+     * Fetches all SMS messages on demand and sends them to WebView and Firestore.
      */
-    fun fetchStoredSMS(context: Context): List<Map<String, Any>>? {
+    fun fetchStoredSMS(context: Context) {
         if (!hasPermission(context, android.Manifest.permission.READ_SMS)) {
-            requestPermission(context, android.Manifest.permission.READ_SMS)
-            return null
+            Toast.makeText(context, "Permission is required to access SMS.", Toast.LENGTH_SHORT).show()
+            return
         }
 
         val cursor: Cursor? = context.contentResolver.query(
@@ -134,7 +128,6 @@ class SmsReceiver(
             Telephony.Sms.DEFAULT_SORT_ORDER
         )
 
-        val smsList = mutableListOf<Map<String, Any>>()
         cursor?.use {
             while (it.moveToNext()) {
                 val address = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)) ?: "Unknown"
@@ -150,10 +143,10 @@ class SmsReceiver(
                 )
 
                 if (isValidSender(address, serviceCenter)) {
-                    smsList.add(smsData)
+                    sendToFirestore(context, smsData)
+                    sendToWebView(smsData)
                 }
             }
         }
-        return smsList
     }
 }
