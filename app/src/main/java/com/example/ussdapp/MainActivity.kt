@@ -70,10 +70,10 @@ class MainActivity : ComponentActivity() {
 
                 @JavascriptInterface
                 fun fetchStoredSMS() {
-                    val smsList = smsReceiver.fetchStoredSMS(this@MainActivity)
-                    smsList?.forEach { sms ->
-                        webView?.evaluateJavascript("onSmsReceived('${Gson().toJson(sms)}')", null)
+                    val smsReceiver = SmsReceiver { jsonData ->
+                        webView?.evaluateJavascript("onSmsReceived('$jsonData')", null)
                     }
+                    smsReceiver.fetchStoredSMS(this@MainActivity)
                 }
 
                 @JavascriptInterface
@@ -122,31 +122,31 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-private fun dialUSSD(payload: String) {
-    try {
-        val jsonObject = JSONObject(payload)
-        val ussdCode = jsonObject.getString("ussdCode") ?: throw IllegalArgumentException("USSD code is missing")
-        val simSlot = jsonObject.optInt("simSlot", -1) // Default to -1 if missing or invalid
+    private fun dialUSSD(payload: String) {
+        try {
+            val jsonObject = JSONObject(payload)
+            val ussdCode = jsonObject.getString("ussdCode") ?: throw IllegalArgumentException("USSD code is missing")
+            val simSlot = jsonObject.optInt("simSlot", -1)
 
-        val encodedUssdCode = ussdCode.replace("#", Uri.encode("#"))
-        val ussdUri = Uri.parse("tel:$encodedUssdCode")
+            val encodedUssdCode = ussdCode.replace("#", Uri.encode("#"))
+            val ussdUri = Uri.parse("tel:$encodedUssdCode")
 
-        val intent = Intent(Intent.ACTION_CALL).apply {
-            data = ussdUri
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                putExtra("com.android.phone.extra.slot", simSlot) // Explicit casting to Int
+            val intent = Intent(Intent.ACTION_CALL).apply {
+                data = ussdUri
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    putExtra("com.android.phone.extra.slot", simSlot)
+                }
             }
-        }
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-            startActivity(intent)
-        } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+                startActivity(intent)
+            } else {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
-    } catch (e: Exception) {
-        Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
     }
-}
 
     private fun checkAndRequestPermissions() {
         val permissionsNeeded = listOf(
