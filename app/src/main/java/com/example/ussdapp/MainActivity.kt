@@ -134,12 +134,19 @@ class MainActivity : ComponentActivity() {
 
 private fun dialUSSD(payload: String) {
     try {
-        // Parse payload into a Map<String, String>
-        val type = object : TypeToken<Map<String, String>>() {}.type
-        val data: Map<String, String> = Gson().fromJson(payload, type)
+        // Parse payload manually without TypeToken
+        val jsonObject = JSONObject(payload)
 
-        val ussdCode = data["ussdCode"] ?: throw IllegalArgumentException("USSD code is missing")
-        val simSlot = data["simSlot"]?.toIntOrNull() ?: throw IllegalArgumentException("Sim slot is invalid or missing")
+        // Extract ussdCode and simSlot from the JSON
+        val ussdCode = jsonObject.optString("ussdCode")
+        if (ussdCode.isEmpty()) {
+            throw IllegalArgumentException("USSD code is missing")
+        }
+
+        val simSlot = jsonObject.optInt("simSlot", -1)
+        if (simSlot == -1) {
+            throw IllegalArgumentException("Sim slot is invalid or missing")
+        }
 
         // Properly encode the USSD code
         val encodedUssdCode = ussdCode.replace("#", Uri.encode("#"))
@@ -160,6 +167,7 @@ private fun dialUSSD(payload: String) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
         }
     } catch (e: Exception) {
+        // Handle errors and log
         Log.e("MainActivity", "Error dialing USSD: ${e.message}")
         Toast.makeText(this, "Failed to dial USSD: ${e.message}", Toast.LENGTH_SHORT).show()
     }
