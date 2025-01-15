@@ -132,27 +132,29 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun dialUSSD(payload: String) {
-        try {
-            val data = Gson().fromJson(payload, Map::class.java)
-            val ussdCode = data["ussdCode"] as? String ?: return
-            val simSlot = data["simSlot"] as? String ?: "0"
+    try {
+        val data = Gson().fromJson(payload, Map::class.java) as Map<String, String>
+        val ussdCode = data["ussdCode"] ?: throw IllegalArgumentException("USSD code is missing")
+        val simSlot = data["simSlot"]?.toIntOrNull() ?: throw IllegalArgumentException("Sim slot is invalid or missing")
 
-            val intent = Intent(Intent.ACTION_CALL).apply {
-                data = Uri.parse("tel:${ussdCode.replace("#", Uri.encode("#"))}")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    putExtra("com.android.phone.extra.slot", simSlot.toInt())
-                }
+        val encodedUssdCode = ussdCode.replace("#", Uri.encode("#"))
+        val intent = Intent(Intent.ACTION_CALL).apply {
+            data = Uri.parse("tel:$encodedUssdCode")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                putExtra("com.android.phone.extra.slot", simSlot) // Set the SIM slot
             }
-
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-                startActivity(intent)
-            } else {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
-            }
-        } catch (e: Exception) {
-            Log.e("USSD", "Error dialing USSD: ${e.message}")
         }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            startActivity(intent)
+        } else {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
+        }
+    } catch (e: Exception) {
+        Log.e("MainActivity", "Error dialing USSD: ${e.message}")
+        Toast.makeText(this, "Failed to dial USSD: ${e.message}", Toast.LENGTH_SHORT).show()
     }
+}
 
     private fun checkAndRequestPermissions() {
         val permissionsNeeded = listOf(
