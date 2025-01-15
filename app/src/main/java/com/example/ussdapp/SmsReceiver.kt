@@ -149,6 +149,6 @@ fun fetchStoredSMS(context: Context): String? {
             }
         }
     }
-
+ }
     return Gson().toJson(smsList)
 }
