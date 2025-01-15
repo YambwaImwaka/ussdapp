@@ -22,6 +22,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     private val REQUEST_PERMISSIONS = 101
@@ -134,42 +135,27 @@ class MainActivity : ComponentActivity() {
 
 private fun dialUSSD(payload: String) {
     try {
-        // Parse payload manually without TypeToken
         val jsonObject = JSONObject(payload)
+        val ussdCode = jsonObject.getString("ussdCode") ?: throw IllegalArgumentException("USSD code is missing")
+        val simSlot = jsonObject.optInt("simSlot", -1) // Default to -1 if missing or invalid
 
-        // Extract ussdCode and simSlot from the JSON
-        val ussdCode = jsonObject.optString("ussdCode")
-        if (ussdCode.isEmpty()) {
-            throw IllegalArgumentException("USSD code is missing")
-        }
-
-        val simSlot = jsonObject.optInt("simSlot", -1)
-        if (simSlot == -1) {
-            throw IllegalArgumentException("Sim slot is invalid or missing")
-        }
-
-        // Properly encode the USSD code
         val encodedUssdCode = ussdCode.replace("#", Uri.encode("#"))
         val ussdUri = Uri.parse("tel:$encodedUssdCode")
 
-        // Create the intent with the USSD code and SIM slot
         val intent = Intent(Intent.ACTION_CALL).apply {
             data = ussdUri
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                putExtra("com.android.phone.extra.slot", simSlot)
+                putExtra("com.android.phone.extra.slot", simSlot) // Explicit casting to Int
             }
         }
 
-        // Check permission and start the call
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
             startActivity(intent)
         } else {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE), REQUEST_PERMISSIONS)
         }
     } catch (e: Exception) {
-        // Handle errors and log
-        Log.e("MainActivity", "Error dialing USSD: ${e.message}")
-        Toast.makeText(this, "Failed to dial USSD: ${e.message}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
 
