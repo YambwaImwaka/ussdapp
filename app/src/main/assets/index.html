@@ -300,9 +300,10 @@ button {
             Version 1.0.1
         </div>
     </div>
-
+    
+  
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
+        document.addEventListener("DOMContentLoaded", function() {
             console.log("DOM fully loaded and parsed.");
 
             // Fetch SIM slots on page load
@@ -311,6 +312,15 @@ button {
             } else {
                 console.error("AndroidInterface or fetchSIMSlots method not available.");
             }
+
+            // Fix keyboard focus issue on enter
+            const merchantCodeInput = document.getElementById('merchantCode');
+            merchantCodeInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    merchantCodeInput.blur();  // Hide the keyboard
+                }
+            });
         });
 
         function populateSIMSlots(json) {
@@ -340,6 +350,9 @@ button {
         }
 
         function initiatePayment() {
+            // Show loading indicator
+            document.getElementById("loadingOverlay").style.display = 'flex';
+
             const simSlot = document.getElementById("simSlots").value;
             const amount = document.getElementById("amount").value;
             const merchantCode = document.getElementById("merchantCode").value;
@@ -367,25 +380,28 @@ button {
             } else {
                 alert("Android interface not available.");
             }
+
+            // Hide loading indicator after operation completes (you can simulate completion for now)
+            setTimeout(function() {
+                document.getElementById("loadingOverlay").style.display = 'none';
+            }, 2000);  // Simulate a 2-second process time
         }
 
         function fetchStoredSMS() {
+            // Show loading indicator
+            document.getElementById("loadingOverlay").style.display = 'flex';
+
             if (window.AndroidInterface && window.AndroidInterface.fetchStoredSMS) {
                 console.log("Fetching SMS on demand...");
-                const fetchedSmsJson = window.AndroidInterface.fetchStoredSMS();
-                try {
-                    const fetchedSmsList = JSON.parse(fetchedSmsJson);
-
-                    // Send each SMS to the transaction log
-                    fetchedSmsList.forEach((sms) => {
-                        onSmsReceived(JSON.stringify(sms));
-                    });
-                } catch (error) {
-                    console.error("Error processing fetched SMS:", error);
-                }
+                window.AndroidInterface.fetchStoredSMS();
             } else {
                 console.error("AndroidInterface or fetchStoredSMS method not available.");
             }
+
+            // Hide loading indicator after operation completes (you can simulate completion for now)
+            setTimeout(function() {
+                document.getElementById("loadingOverlay").style.display = 'none';
+            }, 2000);  // Simulate a 2-second process time
         }
 
         function onSmsReceived(json) {
@@ -394,28 +410,14 @@ button {
                 const logDiv = document.getElementById("transactionLog");
                 const logEntry = document.createElement("div");
                 logEntry.classList.add("log-entry");
-
-                // Modernized log card design
-                logEntry.innerHTML = `
-                    <div class="log-header">
-                        <span>From: ${sms.address}</span>
-                        <span>${new Date(sms.date).toLocaleString()}</span>
-                    </div>
-                    <div class="log-body">${sms.body}</div>
-                    <div class="log-footer">
-                        <span>${sms.serviceCenter || "Unknown Service Center"}</span>
-                        <span class="log-status ${sms.status === 'SUCCESS' ? 'success' : 'failed'}">
-                            ${sms.status || "Unknown Status"}
-                        </span>
-                    </div>
-                `;
-
+                logEntry.textContent = `From: ${sms.address}, Message: ${sms.body}, Date: ${new Date(sms.date).toLocaleString()}`;
                 logDiv.appendChild(logEntry);
             } catch (error) {
                 console.error("Error parsing received SMS JSON:", error);
             }
         }
 
+        // Register a global handler for receiving SMS from Kotlin
         if (!window.onSmsReceived) {
             window.onSmsReceived = onSmsReceived;
         }

