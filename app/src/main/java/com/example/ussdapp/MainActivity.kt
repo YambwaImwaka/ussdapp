@@ -21,7 +21,6 @@ import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
@@ -70,16 +69,7 @@ class MainActivity : ComponentActivity() {
 
                 @JavascriptInterface
                 fun fetchStoredSMS() {
-                    val smsReceiver = SmsReceiver { jsonData ->
-                        webView?.evaluateJavascript("onSmsReceived('$jsonData')", null)
-                    }
                     smsReceiver.fetchStoredSMS(this@MainActivity)
-                }
-
-                @JavascriptInterface
-                fun updateTrustedServicePatterns(patternsJson: String) {
-                    val patterns = Gson().fromJson(patternsJson, Array<String>::class.java).toList()
-                    smsReceiver.updateTrustedServicePatterns(patterns)
                 }
 
                 @JavascriptInterface
@@ -88,6 +78,7 @@ class MainActivity : ComponentActivity() {
                 }
             }, "AndroidInterface")
 
+            // Load the local HTML file
             loadUrl("file:///android_asset/index.html")
         }
         setContentView(webView)
@@ -109,17 +100,6 @@ class MainActivity : ComponentActivity() {
                 webView?.evaluateJavascript("populateSIMSlots('{}')", null)
             }
         }
-    }
-
-    private fun sendToFirestore(data: Map<String, Any>) {
-        firestore.collection("transactions")
-            .add(data)
-            .addOnSuccessListener {
-                Log.d("Firestore", "Data successfully sent: $data")
-            }
-            .addOnFailureListener { e ->
-                Log.e("Firestore", "Failed to send data: ${e.message}")
-            }
     }
 
     private fun dialUSSD(payload: String) {
@@ -151,7 +131,6 @@ class MainActivity : ComponentActivity() {
     private fun checkAndRequestPermissions() {
         val permissionsNeeded = listOf(
             Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.POST_NOTIFICATIONS,
             Manifest.permission.READ_SMS,
             Manifest.permission.CALL_PHONE,
             Manifest.permission.READ_PHONE_STATE
