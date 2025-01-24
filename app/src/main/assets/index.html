@@ -112,91 +112,54 @@ button:hover {
   height: 60px;
    animation: spin 1.5s linear infinite; /* Faster spin for a sleeker look */
 
-/* Modernized Transaction Log */
-.transaction-log {
-    border: 1px solid #E0E4E7; /* Subtle border */
-    border-radius: 12px;
-    padding: 16px;
-    background-color: #FAFAFA; /* Light neutral background */
-    max-height: 300px; /* Increased height */
+/* Transaction Log Styling */
+#transactionLog {
+    max-height: 300px;
     overflow-y: auto;
-    margin-top: 20px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* Slight depth */
-    gap: 12px;
-    display: flex;
-    flex-direction: column;
+    padding: 0;
+    margin: 0;
 }
 
-/* Individual Transaction Card */
+/* Individual Log Entry */
 .log-entry {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 16px;
+    padding: 12px;
+    margin-bottom: 8px;
     background-color: #ffffff;
-    border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); /* Soft shadow */
-    border: 1px solid #E0E4E7; /* Soft border for structure */
-    transition: all 0.3s ease-in-out;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    font-size: 14px;
+    color: #333;
+    line-height: 1.6;
+    word-wrap: break-word;
+    animation: fadeInLog 0.3s ease-in-out;
 }
 
+/* Subtle hover effect */
 .log-entry:hover {
-    transform: translateY(-4px); /* Slight hover lift */
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); /* Deeper shadow on hover */
-    background-color: #F8F9FC; /* Slightly lighter hover effect */
+    background-color: #F8F9FC;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
 }
 
 /* Log Entry Header */
 .log-entry .log-header {
-    font-size: 14px;
     font-weight: 600;
-    color: #4E73DF; /* Blue accent for headings */
-    margin-bottom: 4px;
-}
-
-/* Log Entry Content */
-.log-entry .log-content {
-    font-size: 13px;
-    color: #4A4A4A; /* Neutral text color */
-    line-height: 1.6;
-    word-break: break-word; /* Ensure long text wraps */
-}
-
-/* Log Entry Footer */
-.log-entry .log-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 8px;
-    font-size: 12px;
-    color: #888; /* Subtle gray for metadata */
-}
-
-.log-entry .log-footer .log-time {
-    font-style: italic;
-}
-
-.log-entry .log-footer .log-status {
-    font-weight: 600;
-    color: #34C85A; /* Green for success */
-}
-
-.log-entry .log-footer .log-status.failed {
-    color: #FF4C35; /* Red for failure */
+    color: #4E73DF;
+    margin-bottom: 6px;
 }
 
 /* Scrollbar Customization */
-.transaction-log::-webkit-scrollbar {
+#transactionLog::-webkit-scrollbar {
     width: 8px;
 }
 
-.transaction-log::-webkit-scrollbar-thumb {
-    background-color: #D1D8E0; /* Gray scrollbar thumb */
+#transactionLog::-webkit-scrollbar-thumb {
+    background-color: #D1D8E0;
     border-radius: 4px;
 }
 
-.transaction-log::-webkit-scrollbar-thumb:hover {
-    background-color: #A0A7B3; /* Darker gray on hover */
+#transactionLog::-webkit-scrollbar-thumb:hover {
+    background-color: #A0A7B3;
 }
 
 /* Updated Animations */
@@ -405,17 +368,29 @@ button {
         }
 
         function onSmsReceived(json) {
-            try {
-                const sms = JSON.parse(json);
-                const logDiv = document.getElementById("transactionLog");
-                const logEntry = document.createElement("div");
-                logEntry.classList.add("log-entry");
-                logEntry.textContent = `From: ${sms.address}, Message: ${sms.body}, Date: ${new Date(sms.date).toLocaleString()}`;
-                logDiv.appendChild(logEntry);
-            } catch (error) {
-                console.error("Error parsing received SMS JSON:", error);
-            }
-        }
+    try {
+        const sms = JSON.parse(json);
+        const logList = document.getElementById("transactionLog");
+
+        // Create a new log entry
+        const logEntry = document.createElement("li");
+        logEntry.classList.add("log-entry");
+
+        // Set the content
+        logEntry.innerHTML = `
+            <div class="log-header">From: ${sms.address}</div>
+            <div class="log-content">Message: ${sms.body}</div>
+            <div class="log-footer">
+                <span class="log-time">${new Date(sms.date).toLocaleString()}</span>
+            </div>
+        `;
+
+        // Add the log entry to the list
+        logList.appendChild(logEntry);
+    } catch (error) {
+        console.error("Error parsing received SMS JSON:", error);
+    }
+}
 
         // Register a global handler for receiving SMS from Kotlin
         if (!window.onSmsReceived) {
