@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
@@ -69,6 +70,9 @@ class MainActivity : ComponentActivity() {
 
                 @JavascriptInterface
                 fun fetchStoredSMS() {
+                    val smsReceiver = SmsReceiver { jsonData ->
+                        webView?.evaluateJavascript("onSmsReceived('$jsonData')", null)
+                    }
                     smsReceiver.fetchStoredSMS(this@MainActivity)
                 }
 
@@ -84,8 +88,7 @@ class MainActivity : ComponentActivity() {
                 }
             }, "AndroidInterface")
 
-            // Load the external URL
-            loadUrl("https://go.hivergo.com")
+            loadUrl("file:///android_asset/index.html")
         }
         setContentView(webView)
     }
@@ -106,6 +109,17 @@ class MainActivity : ComponentActivity() {
                 webView?.evaluateJavascript("populateSIMSlots('{}')", null)
             }
         }
+    }
+
+    private fun sendToFirestore(data: Map<String, Any>) {
+        firestore.collection("transactions")
+            .add(data)
+            .addOnSuccessListener {
+                Log.d("Firestore", "Data successfully sent: $data")
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Failed to send data: ${e.message}")
+            }
     }
 
     private fun dialUSSD(payload: String) {

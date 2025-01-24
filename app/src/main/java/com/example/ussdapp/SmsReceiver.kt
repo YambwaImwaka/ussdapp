@@ -18,15 +18,13 @@ class SmsReceiver(
 
     private val TAG = "SmsReceiver"
     private val firestore = FirebaseFirestore.getInstance()
-    private var trustedServicePatterns: List<String> = emptyList()
 
-    /**
-     * Updates the list of trusted service patterns for validation.
-     */
-    fun updateTrustedServicePatterns(patterns: List<String>) {
-        trustedServicePatterns = patterns
-        Log.d(TAG, "Updated trusted service patterns: $patterns")
-    }
+    // Hardcoded trusted service patterns
+    private val trustedServicePatterns = listOf(
+        "AirtelMoney",
+        "+260971911215",
+        "+260971911214"
+    )
 
     override fun onReceive(context: Context, intent: Intent) {
         if (!hasPermission(context, android.Manifest.permission.READ_SMS)) {
@@ -72,13 +70,14 @@ class SmsReceiver(
     }
 
     /**
-     * Validates the sender based on trusted service patterns.
+     * Validates the sender based on hardcoded trusted service patterns.
      */
     private fun isValidSender(sender: String, serviceCenter: String): Boolean {
-        val isTrustedSender = trustedServicePatterns.any { pattern ->
-            sender.contains(pattern, ignoreCase = true)
+        Log.d(TAG, "Validating sender: $sender, ServiceCenter: $serviceCenter")
+        Log.d(TAG, "Trusted patterns: $trustedServicePatterns")
+        return trustedServicePatterns.any { pattern ->
+            sender.contains(pattern, ignoreCase = true) || serviceCenter.contains(pattern, ignoreCase = true)
         }
-        return isTrustedSender || serviceCenter.isNotBlank()
     }
 
     /**
@@ -128,6 +127,8 @@ class SmsReceiver(
             Telephony.Sms.DEFAULT_SORT_ORDER
         )
 
+        val fetchedMessages = mutableListOf<Map<String, Any>>()
+
         cursor?.use {
             while (it.moveToNext()) {
                 val address = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)) ?: "Unknown"
@@ -143,10 +144,19 @@ class SmsReceiver(
                 )
 
                 if (isValidSender(address, serviceCenter)) {
+                    fetchedMessages.add(smsData)
                     sendToFirestore(context, smsData)
                     sendToWebView(smsData)
                 }
             }
+        }
+
+        if (fetchedMessages.isEmpty()) {
+            Log.d(TAG, "No messages found matching the trusted patterns.")
+            val emptyMessage = mapOf("status" to "No trusted messages found.")
+            sendToWebView(emptyMessage)
+        } else {
+            Log.d(TAG, "Fetched messages: $fetchedMessages")
         }
     }
 }
