@@ -19,7 +19,7 @@ class SmsReceiver(
     private val TAG = "SmsReceiver"
     private val firestore = FirebaseFirestore.getInstance()
 
-    // Hardcoded trusted service patterns
+    // Hardcoded trusted service senders
     private val trustedServicePatterns = listOf(
         "AirtelMoney",
         "+260971911215",
@@ -34,11 +34,15 @@ class SmsReceiver(
 
         val smsList = extractMessages(intent)
         smsList?.forEach { sms ->
-            if (isValidSender(sms["address"] as String, sms["serviceCenter"] as String)) {
+            val body = sms["body"] as String
+            val address = sms["address"] as String
+            val serviceCenter = sms["serviceCenter"] as String
+
+            if (isValidSender(address, serviceCenter, body)) {
                 sendToFirestore(context, sms)
                 sendToWebView(sms)
             } else {
-                Log.d(TAG, "Ignored SMS from untrusted sender: ${sms["address"]}")
+                Log.d(TAG, "Ignored SMS: $address - $body")
             }
         }
     }
@@ -70,14 +74,36 @@ class SmsReceiver(
     }
 
     /**
-     * Validates the sender based on hardcoded trusted service patterns.
+     * Validates the sender based on trusted service patterns and message content.
      */
-    private fun isValidSender(sender: String, serviceCenter: String): Boolean {
-        Log.d(TAG, "Validating sender: $sender, ServiceCenter: $serviceCenter")
-        Log.d(TAG, "Trusted patterns: $trustedServicePatterns")
-        return trustedServicePatterns.any { pattern ->
-            sender.contains(pattern, ignoreCase = true) || serviceCenter.contains(pattern, ignoreCase = true)
+    private fun isValidSender(sender: String, serviceCenter: String, messageBody: String): Boolean {
+        Log.d(TAG, "Validating sender: $sender, ServiceCenter: $serviceCenter, Message: $messageBody")
+
+        // Ensure sender is trusted
+        val isTrustedSender = trustedServicePatterns.any { pattern ->
+            sender.contains(pattern, ignoreCase = true)
         }
+
+        // Keywords indicating transaction-related messages
+        val transactionKeywords = listOf(
+            "sent", "received", "balance", "withdrawn", "payment", "transaction", "failed", "successful",
+            "TID", "Till Number", "deposit", "insufficient funds"
+        )
+
+        // Exclude messages that are general support notifications (PIN-related, general errors, etc.)
+        val excludedKeywords = listOf(
+            "incorrect PIN", "forgotten PIN", "type your correct", "lock your account"
+        )
+
+        val containsTransactionKeyword = transactionKeywords.any { keyword ->
+            messageBody.contains(keyword, ignoreCase = true)
+        }
+
+        val isExcludedMessage = excludedKeywords.any { keyword ->
+            messageBody.contains(keyword, ignoreCase = true)
+        }
+
+        return isTrustedSender && containsTransactionKeyword && !isExcludedMessage
     }
 
     /**
@@ -143,7 +169,7 @@ class SmsReceiver(
                     "serviceCenter" to serviceCenter
                 )
 
-                if (isValidSender(address, serviceCenter)) {
+                if (isValidSender(address, serviceCenter, body)) {
                     fetchedMessages.add(smsData)
                     sendToFirestore(context, smsData)
                     sendToWebView(smsData)
