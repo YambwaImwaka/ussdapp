@@ -1,12 +1,22 @@
 package com.techtonic.ussdapp
 
+import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -21,28 +31,80 @@ class MainActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
     private lateinit var storage: FirebaseStorage
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private var imageSelectedCallback: ValueCallback<Uri>? = null
+
+    private val requiredPermissions = mutableListOf(
+        Manifest.permission.RECEIVE_SMS,
+        Manifest.permission.READ_SMS,
+        Manifest.permission.CALL_PHONE,
+        Manifest.permission.READ_PHONE_STATE
+    ).apply {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.POST_NOTIFICATIONS)
+            add(Manifest.permission.READ_MEDIA_IMAGES)
+        } else {
+            add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.entries.all { it.value }
+        if (allGranted) {
+            Log.d("Permissions", "All permissions granted")
+            if (pendingImageSelection) {
+                pendingImageSelection = false
+                openImagePicker()
+            }
+        } else {
+            Log.w("Permissions", "Some permissions were denied")
+            webView?.evaluateJavascript(
+                "showError('Some permissions were denied. App functionality may be limited.')",
+                null
+            )
+        }
+    }
+
+    private val imagePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data: Intent? = result.data
+            val uri = data?.data
+            if (uri != null) {
+                handleSelectedImage(uri)
+            } else {
+                clearImageCallbacks()
+            }
+        } else {
+            clearImageCallbacks()
+        }
+    }
+
+    private var pendingImageSelection = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Initialize Firebase
-        FirebaseApp.initializeApp(this)
         initializeFirebase()
         setupWebView()
+        checkAndRequestPermissions()
     }
 
     private fun initializeFirebase() {
         try {
+            FirebaseApp.initializeApp(this)
             auth = FirebaseAuth.getInstance()
             firestore = FirebaseFirestore.getInstance()
             storage = FirebaseStorage.getInstance()
-            Log.d("Firebase", "Firebase Storage initialized successfully")
 
-            // Enable offline persistence
             val settings = FirebaseFirestoreSettings.Builder()
                 .setPersistenceEnabled(true)
                 .build()
             firestore.firestoreSettings = settings
+            
+            Log.d("Firebase", "Firebase initialized successfully")
         } catch (e: Exception) {
             Log.e("Firebase", "Error initializing Firebase: ${e.message}", e)
         }
@@ -50,12 +112,28 @@ class MainActivity : ComponentActivity() {
 
     private fun setupWebView() {
         webView = WebView(this).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                allowFileAccess = true
+                allowContentAccess = true
+                databaseEnabled = true
+            }
+            
             WebView.setWebContentsDebuggingEnabled(true)
 
             webViewClient = WebViewClient()
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowFileChooser(
+                    webView: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    fileChooserParams: FileChooserParams?
+                ): Boolean {
+                    this@MainActivity.filePathCallback = filePathCallback
+                    startImageSelection()
+                    return true
+                }
+            }
 
             addJavascriptInterface(WebAppInterface(), "AndroidInterface")
             loadUrl("file:///android_asset/login.html")
@@ -63,8 +141,85 @@ class MainActivity : ComponentActivity() {
         setContentView(webView)
     }
 
+    private fun checkAndRequestPermissions() {
+        val permissionsToRequest = requiredPermissions.filter { permission ->
+            ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+        }
+    }
+
+    private fun startImageSelection() {
+        if (checkStoragePermission()) {
+            openImagePicker()
+        } else {
+            pendingImageSelection = true
+            requestStoragePermission()
+        }
+    }
+
+    private fun checkStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_MEDIA_IMAGES
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestStoragePermission() {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        requestPermissionLauncher.launch(arrayOf(permission))
+    }
+
+    private fun openImagePicker() {
+        val intent = Intent(Intent.ACTION_PICK).apply {
+            type = "image/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/jpeg", "image/png"))
+        }
+        imagePickerLauncher.launch(intent)
+    }
+
+    private fun handleSelectedImage(uri: Uri) {
+        try {
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                val bytes = inputStream.readBytes()
+                val base64Image = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                webView?.evaluateJavascript(
+                    "handleSelectedImage('data:image/jpeg;base64,$base64Image')",
+                    null
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("Image", "Error processing image: ${e.message}", e)
+            webView?.evaluateJavascript(
+                "showError('Error processing image')",
+                null
+            )
+        } finally {
+            clearImageCallbacks()
+        }
+    }
+
+    private fun clearImageCallbacks() {
+        filePathCallback?.onReceiveValue(null)
+        imageSelectedCallback?.onReceiveValue(null)
+        filePathCallback = null
+        imageSelectedCallback = null
+    }
+
     inner class WebAppInterface {
-        // Authentication Methods
         @JavascriptInterface
         fun loginUser(email: String, password: String) {
             Log.d("Auth", "Attempting to login with email: $email")
@@ -130,9 +285,9 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
-        fun getCurrentUser() {
+        fun getCurrentUser(): String {
             val user = auth.currentUser
-            if (user != null) {
+            return if (user != null) {
                 firestore.collection("users").document(user.uid)
                     .get()
                     .addOnSuccessListener { document ->
@@ -148,11 +303,19 @@ class MainActivity : ComponentActivity() {
                     }
                     .addOnFailureListener { e ->
                         Log.e("Auth", "Failed to get user data: ${e.message}", e)
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "showError('Failed to get user data')",
+                                null
+                            )
+                        }
                     }
+                "{}"
+            } else {
+                "{}"
             }
         }
 
-        // Product Methods
         @JavascriptInterface
         fun getProducts(type: String = "all") {
             Log.d("Products", "Fetching products of type: $type")
@@ -180,6 +343,12 @@ class MainActivity : ComponentActivity() {
                 }
                 .addOnFailureListener { e ->
                     Log.e("Products", "Failed to fetch products: ${e.message}", e)
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "showError('Failed to fetch products')",
+                            null
+                        )
+                    }
                 }
         }
 
@@ -214,17 +383,14 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val imageData = data.getString("image")
-                    .split(",").last() // Get the base64 part after the comma
-                    .trim() // Remove any whitespace
-
-                Log.d("ProductCreation", "Processing image data of length: ${imageData.length}")
+                    .split(",").last()
+                    .trim()
 
                 val imageBytes = android.util.Base64.decode(imageData, android.util.Base64.DEFAULT)
                 val imageRef = storage.reference.child("product_images/${UUID.randomUUID()}.jpg")
 
                 imageRef.putBytes(imageBytes)
                     .addOnSuccessListener { taskSnapshot ->
-                        Log.d("ProductCreation", "Image upload successful")
                         imageRef.downloadUrl.addOnSuccessListener { uri ->
                             val product = hashMapOf(
                                 "name" to data.getString("name"),
@@ -274,180 +440,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Order Methods
-        @JavascriptInterface
-        fun getOrders() {
-            val user = auth.currentUser
-            if (user == null) {
-                Log.e("Orders", "User not authenticated")
-                return
-            }
-            
-            firestore.collection("users").document(user.uid)
-                .get()
-                .addOnSuccessListener { userDoc ->
-                    val userType = userDoc.getString("userType")
-                    val query = when (userType) {
-                        "farmer" -> firestore.collection("orders")
-                            .whereEqualTo("farmerId", user.uid)
-                        else -> firestore.collection("orders")
-                            .whereEqualTo("buyerId", user.uid)
-                    }
-
-                    query.get()
-                        .addOnSuccessListener { documents ->
-                            val orders = documents.map { doc ->
-                                val data = doc.data
-                                data["id"] = doc.id
-                                data
-                            }
-                            Log.d("Orders", "Retrieved ${orders.size} orders")
-                            
-                            runOnUiThread {
-                                webView?.evaluateJavascript(
-                                    "renderOrders(${Gson().toJson(orders)})",
-                                    null
-                                )
-                            }
-                        }
-                        .addOnFailureListener { e ->
-                            Log.e("Orders", "Failed to fetch orders: ${e.message}", e)
-                        }
-                }
-                .addOnFailureListener { e ->
-                    Log.e("Orders", "Failed to get user type: ${e.message}", e)
-                }
-        }
-
-        @JavascriptInterface
-        fun placeOrder(productId: String) {
-            val user = auth.currentUser
-            if (user == null) {
-                Log.e("Orders", "User not authenticated")
-                return
-            }
-
-            firestore.collection("products").document(productId)
-                .get()
-                .addOnSuccessListener { document ->
-                    val product = document.data
-                    val order = hashMapOf(
-                        "productId" to productId,
-                        "productName" to product!!["name"],
-                        "buyerId" to user.uid,
-                        "farmerId" to product["farmerId"],
-                        "price" to product["price"],
-                        "status" to "PENDING",
-                        "createdAt" to Date()
-                    )
-
-                    firestore.collection("orders").add(order)
-                        .addOnSuccessListener {
-                            Log.d("Orders", "Order placed successfully")
-                            runOnUiThread {
-                                webView?.loadUrl("file:///android_asset/orders.html")
-                            }
-                        }
-                        .addOnFailureListener { e ->
-                            Log.e("Orders", "Failed to place order: ${e.message}", e)
-                            runOnUiThread {
-                                webView?.evaluateJavascript(
-                                    "showError('Failed to place order: ${e.message}')",
-                                    null
-                                )
-                            }
-                        }
-                }
-                .addOnFailureListener { e ->
-                    Log.e("Orders", "Failed to get product details: ${e.message}", e)
-                }
-        }
-
-        @JavascriptInterface
-        fun updateOrderStatus(orderId: String, status: String) {
-            Log.d("Orders", "Updating order $orderId to status: $status")
-            firestore.collection("orders").document(orderId)
-                .update("status", status)
-                .addOnSuccessListener {
-                    Log.d("Orders", "Order status updated successfully")
-                    getOrders() // Refresh orders list
-                }
-                .addOnFailureListener { e ->
-                    Log.e("Orders", "Failed to update order status: ${e.message}", e)
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            "showError('Failed to update order status: ${e.message}')",
-                            null
-                        )
-                    }
-                }
-        }
-
-        // Chat Methods
-        @JavascriptInterface
-        fun initializeChat(otherUserId: String) {
-            val user = auth.currentUser
-            if (user == null) {
-                Log.e("Chat", "User not authenticated")
-                return
-            }
-
-            val chatId = listOf(user.uid, otherUserId).sorted().joinToString("-")
-            
-            firestore.collection("chats").document(chatId)
-                .collection("messages")
-                .orderBy("timestamp")
-                .addSnapshotListener { snapshot, e ->
-                    if (e != null) {
-                        Log.e("Chat", "Failed to listen to messages: ${e.message}", e)
-                        return@addSnapshotListener
-                    }
-
-                    snapshot?.documentChanges?.forEach { change ->
-                        val message = change.document.data
-                        message["isSent"] = message["senderId"] == user.uid
-                        
-                        runOnUiThread {
-                            webView?.evaluateJavascript(
-                                "renderMessage(${Gson().toJson(message)})",
-                                null
-                            )
-                        }
-                    }
-                }
-        }
-
-        @JavascriptInterface
-        fun sendMessage(chatId: String, message: String) {
-            val user = auth.currentUser
-            if (user == null) {
-                Log.e("Chat", "User not authenticated")
-                return
-            }
-            
-            val messageData = hashMapOf(
-                "text" to message,
-                "senderId" to user.uid,
-                "timestamp" to Date()
-            )
-
-            firestore.collection("chats").document(chatId)
-                .collection("messages")
-                .add(messageData)
-                .addOnSuccessListener {
-                    Log.d("Chat", "Message sent successfully")
-                }
-                .addOnFailureListener { e ->
-                    Log.e("Chat", "Failed to send message: ${e.message}", e)
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            "showError('Failed to send message: ${e.message}')",
-                            null
-                        )
-                    }
-                }
-        }
-
         @JavascriptInterface
         fun logout() {
             try {
@@ -463,6 +455,18 @@ class MainActivity : ComponentActivity() {
                         "showError('Failed to logout: ${e.message}')",
                         null
                     )
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun startImageSelection() {
+            runOnUiThread {
+                if (checkStoragePermission()) {
+                    openImagePicker()
+                } else {
+                    pendingImageSelection = true
+                    requestStoragePermission()
                 }
             }
         }

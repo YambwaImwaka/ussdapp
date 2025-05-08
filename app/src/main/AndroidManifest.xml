@@ -2,23 +2,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions for SMS -->
+    <!-- SMS and Phone Permissions -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
-
-    <!-- Permission to make phone calls (required for USSD dial) -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
-    
-    <!-- Permission for reading SIM card information (for selecting SIM) -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
-    <!-- Permission for posting notifications (Android 13+) -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" 
-        tools:targetApi="33" />
-
-    <!-- Permissions for optimized app operation -->
+    <!-- Network Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Storage Permissions -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:minSdkVersion="33" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+
+    <!-- Notification Permission -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" 
+        tools:targetApi="33" />
 
     <application
         android:allowBackup="true"
@@ -31,7 +32,6 @@
         android:theme="@style/Theme.UssdApp"
         tools:targetApi="31">
 
-        <!-- Main Activity Declaration -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,7 +43,6 @@
             </intent-filter>
         </activity>
 
-        <!-- SMS Receiver Declaration -->
         <receiver 
             android:name=".SmsReceiver" 
             android:exported="false">

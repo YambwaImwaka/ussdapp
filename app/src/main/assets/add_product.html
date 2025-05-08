@@ -31,6 +31,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            font-weight: 500;
         }
 
         .main-content {
@@ -64,6 +65,12 @@
             border-radius: 8px;
             font-size: 16px;
             box-sizing: border-box;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #45A29E;
         }
 
         .form-group textarea {
@@ -77,17 +84,24 @@
             padding: 20px;
             text-align: center;
             cursor: pointer;
-            transition: border-color 0.3s ease;
+            transition: all 0.3s ease;
             position: relative;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         .image-upload:hover {
             border-color: #45A29E;
+            background-color: rgba(69, 162, 158, 0.05);
         }
 
         .image-upload p {
             margin: 0;
             color: #666;
+            font-size: 14px;
         }
 
         .image-preview {
@@ -96,6 +110,7 @@
             margin-top: 10px;
             border-radius: 8px;
             display: none;
+            object-fit: contain;
         }
 
         .submit-button {
@@ -134,7 +149,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.9);
             justify-content: center;
             align-items: center;
             z-index: 1000;
@@ -149,20 +164,34 @@
             animation: spin 1s linear infinite;
         }
 
+        .loading-text {
+            margin-top: 16px;
+            color: #45A29E;
+            font-weight: 500;
+        }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-spinner"></div>
+        <div>
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Processing...</div>
+        </div>
     </div>
 
     <nav class="navbar">
         <a href="home.html" class="back-button" id="backButton">← Back to Home</a>
-        <div class="timestamp" id="timestamp">2025-05-08 20:13:06</div>
+        <div class="timestamp" id="timestamp"></div>
     </nav>
 
     <div class="main-content">
@@ -171,28 +200,46 @@
             <form id="productForm" onsubmit="submitProduct(event)">
                 <div class="form-group">
                     <label for="productName">Product Name</label>
-                    <input type="text" id="productName" required minlength="3" maxlength="100">
+                    <input 
+                        type="text" 
+                        id="productName" 
+                        required 
+                        minlength="3" 
+                        maxlength="100"
+                        placeholder="Enter product name"
+                    >
                     <div class="error-message" id="productNameError"></div>
                 </div>
 
                 <div class="form-group">
                     <label for="price">Price (K)</label>
-                    <input type="number" id="price" min="0" step="0.01" required>
+                    <input 
+                        type="number" 
+                        id="price" 
+                        min="0" 
+                        step="0.01" 
+                        required
+                        placeholder="Enter price"
+                    >
                     <div class="error-message" id="priceError"></div>
                 </div>
 
                 <div class="form-group">
                     <label for="description">Description</label>
-                    <textarea id="description" required minlength="10" maxlength="500"></textarea>
+                    <textarea 
+                        id="description" 
+                        required 
+                        minlength="10" 
+                        maxlength="500"
+                        placeholder="Enter product description"
+                    ></textarea>
                     <div class="error-message" id="descriptionError"></div>
                 </div>
 
                 <div class="form-group">
                     <label>Product Image</label>
-                    <div class="image-upload" onclick="document.getElementById('imageInput').click()">
+                    <div class="image-upload" id="imageUpload">
                         <p id="uploadText">Click to upload image</p>
-                        <input type="file" id="imageInput" accept="image/*" style="display: none" 
-                               onchange="previewImage(this)">
                         <img id="imagePreview" class="image-preview" alt="Product preview">
                     </div>
                     <div class="error-message" id="imageError"></div>
@@ -204,6 +251,7 @@
     </div>
 
     <script>
+        let selectedImage = null;
         let isSubmitting = false;
 
         function formatDateTime(date) {
@@ -215,11 +263,8 @@
                    String(date.getUTCSeconds()).padStart(2, '0');
         }
 
-        function updateTimestamp() {
-            document.getElementById('timestamp').textContent = formatDateTime(new Date());
-        }
-
-        function showLoading() {
+        function showLoading(message = 'Processing...') {
+            document.querySelector('.loading-text').textContent = message;
             document.getElementById('loadingOverlay').style.display = 'flex';
             document.getElementById('submitButton').disabled = true;
             isSubmitting = true;
@@ -250,11 +295,23 @@
             }
         }
 
+        function handleSelectedImage(base64Image) {
+            selectedImage = base64Image;
+            const preview = document.getElementById('imagePreview');
+            const uploadText = document.getElementById('uploadText');
+            
+            preview.src = base64Image;
+            preview.style.display = 'block';
+            uploadText.style.display = 'none';
+            
+            clearErrors();
+        }
+
         function validateForm() {
             clearErrors();
             let isValid = true;
 
-            const name = document.getElementById('productName').value;
+            const name = document.getElementById('productName').value.trim();
             if (name.length < 3) {
                 showError('Product name must be at least 3 characters long', 'productNameError');
                 isValid = false;
@@ -266,55 +323,18 @@
                 isValid = false;
             }
 
-            const description = document.getElementById('description').value;
+            const description = document.getElementById('description').value.trim();
             if (description.length < 10) {
                 showError('Description must be at least 10 characters long', 'descriptionError');
                 isValid = false;
             }
 
-            const imageInput = document.getElementById('imageInput');
-            if (!imageInput.files || !imageInput.files[0]) {
+            if (!selectedImage) {
                 showError('Please select an image', 'imageError');
                 isValid = false;
             }
 
             return isValid;
-        }
-
-        function previewImage(input) {
-            const preview = document.getElementById('imagePreview');
-            const uploadText = document.getElementById('uploadText');
-            const errorElement = document.getElementById('imageError');
-            
-            if (input.files && input.files[0]) {
-                const file = input.files[0];
-                
-                // Validate file type
-                if (!file.type.startsWith('image/')) {
-                    showError('Please select a valid image file', 'imageError');
-                    input.value = '';
-                    return;
-                }
-
-                // Validate file size (max 5MB)
-                if (file.size > 5 * 1024 * 1024) {
-                    showError('Image size should be less than 5MB', 'imageError');
-                    input.value = '';
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                    uploadText.style.display = 'none';
-                    errorElement.style.display = 'none';
-                }
-                reader.onerror = function() {
-                    showError('Error reading file', 'imageError');
-                }
-                reader.readAsDataURL(file);
-            }
         }
 
         function submitProduct(event) {
@@ -324,34 +344,48 @@
             
             if (!validateForm()) return;
 
-            showLoading();
+            showLoading('Creating product...');
 
-            const imageInput = document.getElementById('imageInput');
-            const reader = new FileReader();
-            
-            reader.onload = function(e) {
-                const formData = {
-                    name: document.getElementById('productName').value.trim(),
-                    price: parseFloat(document.getElementById('price').value),
-                    description: document.getElementById('description').value.trim(),
-                    image: e.target.result
-                };
-
-                console.log('Submitting product...');
-                if (window.AndroidInterface && window.AndroidInterface.addProduct) {
-                    window.AndroidInterface.addProduct(JSON.stringify(formData));
-                } else {
-                    console.error('AndroidInterface or addProduct not available');
-                    showError('System error: AndroidInterface not available');
-                }
+            const formData = {
+                name: document.getElementById('productName').value.trim(),
+                price: parseFloat(document.getElementById('price').value),
+                description: document.getElementById('description').value.trim(),
+                image: selectedImage
             };
 
-            reader.onerror = function() {
-                showError('Error reading image file');
-            };
-
-            reader.readAsDataURL(imageInput.files[0]);
+            if (window.AndroidInterface && window.AndroidInterface.addProduct) {
+                window.AndroidInterface.addProduct(JSON.stringify(formData));
+            } else {
+                console.error('AndroidInterface or addProduct not available');
+                showError('System error: AndroidInterface not available');
+            }
         }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set up image upload handler
+            document.getElementById('imageUpload').addEventListener('click', function(e) {
+                e.preventDefault();
+                if (window.AndroidInterface && window.AndroidInterface.startImageSelection) {
+                    window.AndroidInterface.startImageSelection();
+                } else {
+                    showError('Image upload not available');
+                }
+            });
+
+            // Form validation
+            const form = document.getElementById('productForm');
+            const inputs = form.querySelectorAll('input, textarea');
+            inputs.forEach(input => {
+                input.addEventListener('input', () => {
+                    clearErrors();
+                });
+            });
+
+            // Start timestamp updates
+            updateTimestamp();
+            setInterval(updateTimestamp, 1000);
+        });
 
         // Handle back button
         document.getElementById('backButton').addEventListener('click', function(e) {
@@ -363,28 +397,10 @@
             }
         });
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            updateTimestamp();
-            setInterval(updateTimestamp, 1000);
-
-            // Form validation
-            const form = document.getElementById('productForm');
-            const inputs = form.querySelectorAll('input, textarea');
-            inputs.forEach(input => {
-                input.addEventListener('input', () => {
-                    clearErrors();
-                });
-            });
-        });
-
-        // Global error handler
-        window.onerror = function(msg, url, line) {
-            console.error('JavaScript error:', msg, 'at', url, ':', line);
-            showError('An unexpected error occurred. Please try again.');
-            hideLoading();
-            return false;
-        };
+        // Update timestamp
+        function updateTimestamp() {
+            document.getElementById('timestamp').textContent = formatDateTime(new Date());
+        }
     </script>
 </body>
 </html>
