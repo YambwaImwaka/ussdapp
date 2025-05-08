@@ -20,6 +20,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
         .back-button {
@@ -75,10 +78,16 @@
             text-align: center;
             cursor: pointer;
             transition: border-color 0.3s ease;
+            position: relative;
         }
 
         .image-upload:hover {
             border-color: #45A29E;
+        }
+
+        .image-upload p {
+            margin: 0;
+            color: #666;
         }
 
         .image-preview {
@@ -105,12 +114,55 @@
         .submit-button:hover {
             background: #3d8f8a;
         }
+
+        .submit-button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #45A29E;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
     <nav class="navbar">
-        <a href="home.html" class="back-button">← Back to Home</a>
-        <div class="timestamp" id="timestamp"></div>
+        <a href="home.html" class="back-button" id="backButton">← Back to Home</a>
+        <div class="timestamp" id="timestamp">2025-05-08 20:13:06</div>
     </nav>
 
     <div class="main-content">
@@ -119,72 +171,220 @@
             <form id="productForm" onsubmit="submitProduct(event)">
                 <div class="form-group">
                     <label for="productName">Product Name</label>
-                    <input type="text" id="productName" required>
+                    <input type="text" id="productName" required minlength="3" maxlength="100">
+                    <div class="error-message" id="productNameError"></div>
                 </div>
 
                 <div class="form-group">
                     <label for="price">Price (K)</label>
                     <input type="number" id="price" min="0" step="0.01" required>
+                    <div class="error-message" id="priceError"></div>
                 </div>
 
                 <div class="form-group">
                     <label for="description">Description</label>
-                    <textarea id="description" required></textarea>
+                    <textarea id="description" required minlength="10" maxlength="500"></textarea>
+                    <div class="error-message" id="descriptionError"></div>
                 </div>
 
                 <div class="form-group">
                     <label>Product Image</label>
                     <div class="image-upload" onclick="document.getElementById('imageInput').click()">
-                        <p>Click to upload image</p>
+                        <p id="uploadText">Click to upload image</p>
                         <input type="file" id="imageInput" accept="image/*" style="display: none" 
                                onchange="previewImage(this)">
-                        <img id="imagePreview" class="image-preview">
+                        <img id="imagePreview" class="image-preview" alt="Product preview">
                     </div>
+                    <div class="error-message" id="imageError"></div>
                 </div>
 
-                <button type="submit" class="submit-button">Add Product</button>
+                <button type="submit" class="submit-button" id="submitButton">Add Product</button>
             </form>
         </div>
     </div>
 
     <script>
+        let isSubmitting = false;
+
+        function formatDateTime(date) {
+            return date.getUTCFullYear() + '-' + 
+                   String(date.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                   String(date.getUTCDate()).padStart(2, '0') + ' ' +
+                   String(date.getUTCHours()).padStart(2, '0') + ':' +
+                   String(date.getUTCMinutes()).padStart(2, '0') + ':' +
+                   String(date.getUTCSeconds()).padStart(2, '0');
+        }
+
         function updateTimestamp() {
-            document.getElementById('timestamp').textContent = 
-                new Date().toISOString().replace('T', ' ').substring(0, 19);
+            document.getElementById('timestamp').textContent = formatDateTime(new Date());
+        }
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('submitButton').disabled = true;
+            isSubmitting = true;
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            document.getElementById('submitButton').disabled = false;
+            isSubmitting = false;
+        }
+
+        function showError(message, elementId = null) {
+            if (elementId) {
+                const errorElement = document.getElementById(elementId);
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+            } else {
+                alert(message);
+            }
+            hideLoading();
+        }
+
+        function clearErrors() {
+            const errorElements = document.getElementsByClassName('error-message');
+            for (let element of errorElements) {
+                element.style.display = 'none';
+                element.textContent = '';
+            }
+        }
+
+        function validateForm() {
+            clearErrors();
+            let isValid = true;
+
+            const name = document.getElementById('productName').value;
+            if (name.length < 3) {
+                showError('Product name must be at least 3 characters long', 'productNameError');
+                isValid = false;
+            }
+
+            const price = parseFloat(document.getElementById('price').value);
+            if (isNaN(price) || price <= 0) {
+                showError('Please enter a valid price greater than 0', 'priceError');
+                isValid = false;
+            }
+
+            const description = document.getElementById('description').value;
+            if (description.length < 10) {
+                showError('Description must be at least 10 characters long', 'descriptionError');
+                isValid = false;
+            }
+
+            const imageInput = document.getElementById('imageInput');
+            if (!imageInput.files || !imageInput.files[0]) {
+                showError('Please select an image', 'imageError');
+                isValid = false;
+            }
+
+            return isValid;
         }
 
         function previewImage(input) {
             const preview = document.getElementById('imagePreview');
+            const uploadText = document.getElementById('uploadText');
+            const errorElement = document.getElementById('imageError');
+            
             if (input.files && input.files[0]) {
+                const file = input.files[0];
+                
+                // Validate file type
+                if (!file.type.startsWith('image/')) {
+                    showError('Please select a valid image file', 'imageError');
+                    input.value = '';
+                    return;
+                }
+
+                // Validate file size (max 5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    showError('Image size should be less than 5MB', 'imageError');
+                    input.value = '';
+                    return;
+                }
+
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     preview.src = e.target.result;
                     preview.style.display = 'block';
+                    uploadText.style.display = 'none';
+                    errorElement.style.display = 'none';
                 }
-                reader.readAsDataURL(input.files[0]);
+                reader.onerror = function() {
+                    showError('Error reading file', 'imageError');
+                }
+                reader.readAsDataURL(file);
             }
         }
 
         function submitProduct(event) {
             event.preventDefault();
             
-            const formData = {
-                name: document.getElementById('productName').value,
-                price: parseFloat(document.getElementById('price').value),
-                description: document.getElementById('description').value,
-                image: document.getElementById('imageInput').files[0]
+            if (isSubmitting) return;
+            
+            if (!validateForm()) return;
+
+            showLoading();
+
+            const imageInput = document.getElementById('imageInput');
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const formData = {
+                    name: document.getElementById('productName').value.trim(),
+                    price: parseFloat(document.getElementById('price').value),
+                    description: document.getElementById('description').value.trim(),
+                    image: e.target.result
+                };
+
+                console.log('Submitting product...');
+                if (window.AndroidInterface && window.AndroidInterface.addProduct) {
+                    window.AndroidInterface.addProduct(JSON.stringify(formData));
+                } else {
+                    console.error('AndroidInterface or addProduct not available');
+                    showError('System error: AndroidInterface not available');
+                }
             };
 
-            if (window.AndroidInterface && window.AndroidInterface.addProduct) {
-                window.AndroidInterface.addProduct(JSON.stringify(formData));
-            }
+            reader.onerror = function() {
+                showError('Error reading image file');
+            };
+
+            reader.readAsDataURL(imageInput.files[0]);
         }
+
+        // Handle back button
+        document.getElementById('backButton').addEventListener('click', function(e) {
+            if (isSubmitting) {
+                e.preventDefault();
+                if (confirm('A product is currently being uploaded. Are you sure you want to leave?')) {
+                    window.location.href = 'home.html';
+                }
+            }
+        });
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             updateTimestamp();
             setInterval(updateTimestamp, 1000);
+
+            // Form validation
+            const form = document.getElementById('productForm');
+            const inputs = form.querySelectorAll('input, textarea');
+            inputs.forEach(input => {
+                input.addEventListener('input', () => {
+                    clearErrors();
+                });
+            });
         });
+
+        // Global error handler
+        window.onerror = function(msg, url, line) {
+            console.error('JavaScript error:', msg, 'at', url, ':', line);
+            showError('An unexpected error occurred. Please try again.');
+            hideLoading();
+            return false;
+        };
     </script>
 </body>
 </html>
