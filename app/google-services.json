@@ -1,13 +1,52 @@
 {
   "project_info": {
-    "project_number": "141024946853",
-    "project_id": "ussdappone",
-    "storage_bucket": "ussdappone.firebasestorage.app"
+    "project_number": "199700481611",
+    "firebase_url": "https://motoka-app-2c166-default-rtdb.firebaseio.com",
+    "project_id": "motoka-app-2c166",
+    "storage_bucket": "motoka-app-2c166.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:141024946853:android:0843f18ff1fd189d88bb4c",
+        "mobilesdk_app_id": "1:199700481611:android:a46634b264c91080416fce",
+        "android_client_info": {
+          "package_name": "com.motoka.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdVFD7KoDoZUUnLbx3pEhYZAjXADU2t-0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:199700481611:android:98abacbfca951052416fce",
+        "android_client_info": {
+          "package_name": "com.motoka.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdVFD7KoDoZUUnLbx3pEhYZAjXADU2t-0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:199700481611:android:2d7638404717f41e416fce",
         "android_client_info": {
           "package_name": "com.techtonic.ussdapp"
         }
@@ -15,7 +54,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBeL7J4-6fl_Zz_u9H-GJ80irpfZWGSdZ4"
+          "current_key": "AIzaSyDdVFD7KoDoZUUnLbx3pEhYZAjXADU2t-0"
         }
       ],
       "services": {
