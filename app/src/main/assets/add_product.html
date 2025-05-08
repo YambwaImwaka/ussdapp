@@ -180,6 +180,7 @@
             font-size: 14px;
         }
     </style>
+    
 </head>
 <body>
     <div class="loading-overlay" id="loadingOverlay">
@@ -238,7 +239,7 @@
 
                 <div class="form-group">
                     <label>Product Image</label>
-                    <div class="image-upload" id="imageUpload">
+                    <div class="image-upload" id="imageUpload" onclick="startImageSelection(event)">
                         <p id="uploadText">Click to upload image</p>
                         <img id="imagePreview" class="image-preview" alt="Product preview">
                     </div>
@@ -295,16 +296,54 @@
             }
         }
 
+        function startImageSelection(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            try {
+                if (window.AndroidInterface && window.AndroidInterface.startImageSelection) {
+                    window.AndroidInterface.startImageSelection();
+                } else {
+                    console.error('Image selection not available');
+                    showError('Image upload not available on this device', 'imageError');
+                }
+            } catch (error) {
+                console.error('Error starting image selection:', error);
+                showError('Failed to start image selection', 'imageError');
+            }
+        }
+
         function handleSelectedImage(base64Image) {
-            selectedImage = base64Image;
-            const preview = document.getElementById('imagePreview');
-            const uploadText = document.getElementById('uploadText');
+            console.log('Received image data of length:', base64Image?.length || 0);
             
-            preview.src = base64Image;
-            preview.style.display = 'block';
-            uploadText.style.display = 'none';
-            
-            clearErrors();
+            if (!base64Image) {
+                showError('No image data received', 'imageError');
+                return;
+            }
+
+            try {
+                selectedImage = base64Image;
+                const preview = document.getElementById('imagePreview');
+                const uploadText = document.getElementById('uploadText');
+                
+                preview.onload = function() {
+                    preview.style.display = 'block';
+                    uploadText.style.display = 'none';
+                };
+                
+                preview.onerror = function() {
+                    console.error('Error loading image preview');
+                    showError('Error displaying image preview', 'imageError');
+                    selectedImage = null;
+                };
+                
+                preview.src = base64Image;
+                clearErrors();
+            } catch (error) {
+                console.error('Error handling selected image:', error);
+                showError('Failed to process selected image', 'imageError');
+                selectedImage = null;
+            }
         }
 
         function validateForm() {
@@ -340,10 +379,17 @@
         function submitProduct(event) {
             event.preventDefault();
             
-            if (isSubmitting) return;
+            if (isSubmitting) {
+                console.log('Form is already being submitted');
+                return;
+            }
             
-            if (!validateForm()) return;
+            if (!validateForm()) {
+                console.log('Form validation failed');
+                return;
+            }
 
+            console.log('Starting product submission');
             showLoading('Creating product...');
 
             const formData = {
@@ -353,26 +399,33 @@
                 image: selectedImage
             };
 
-            if (window.AndroidInterface && window.AndroidInterface.addProduct) {
-                window.AndroidInterface.addProduct(JSON.stringify(formData));
-            } else {
-                console.error('AndroidInterface or addProduct not available');
-                showError('System error: AndroidInterface not available');
+            try {
+                if (window.AndroidInterface && window.AndroidInterface.addProduct) {
+                    console.log('Submitting to AndroidInterface');
+                    window.AndroidInterface.addProduct(JSON.stringify(formData));
+                } else {
+                    console.error('AndroidInterface or addProduct not available');
+                    showError('System error: AndroidInterface not available');
+                }
+            } catch (error) {
+                console.error('Error submitting product:', error);
+                showError('Failed to submit product: ' + error.message);
+                hideLoading();
             }
         }
 
+        // Handle back button
+        document.getElementById('backButton').addEventListener('click', function(e) {
+            if (isSubmitting) {
+                e.preventDefault();
+                if (confirm('A product is currently being uploaded. Are you sure you want to leave?')) {
+                    window.location.href = 'home.html';
+                }
+            }
+        });
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            // Set up image upload handler
-            document.getElementById('imageUpload').addEventListener('click', function(e) {
-                e.preventDefault();
-                if (window.AndroidInterface && window.AndroidInterface.startImageSelection) {
-                    window.AndroidInterface.startImageSelection();
-                } else {
-                    showError('Image upload not available');
-                }
-            });
-
             // Form validation
             const form = document.getElementById('productForm');
             const inputs = form.querySelectorAll('input, textarea');
@@ -385,22 +438,22 @@
             // Start timestamp updates
             updateTimestamp();
             setInterval(updateTimestamp, 1000);
-        });
-
-        // Handle back button
-        document.getElementById('backButton').addEventListener('click', function(e) {
-            if (isSubmitting) {
-                e.preventDefault();
-                if (confirm('A product is currently being uploaded. Are you sure you want to leave?')) {
-                    window.location.href = 'home.html';
-                }
-            }
+            
+            console.log('Add product page initialized');
         });
 
         // Update timestamp
         function updateTimestamp() {
             document.getElementById('timestamp').textContent = formatDateTime(new Date());
         }
+
+        // Global error handler
+        window.onerror = function(msg, url, line, col, error) {
+            console.error('Global error:', { msg, url, line, col, error });
+            showError('An unexpected error occurred. Please try again.');
+            hideLoading();
+            return false;
+        };
     </script>
 </body>
 </html>

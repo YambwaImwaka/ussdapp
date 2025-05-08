@@ -87,14 +87,25 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        initializeFirebase()
+        
+        // Initialize Firebase first
+        try {
+            FirebaseApp.initializeApp(this)
+            initializeFirebase()
+            Log.d("Firebase", "Firebase initialized successfully")
+        } catch (e: Exception) {
+            Log.e("Firebase", "Failed to initialize Firebase: ${e.message}", e)
+        }
+        
+        // Then setup WebView
         setupWebView()
+        
+        // Finally check permissions
         checkAndRequestPermissions()
     }
 
     private fun initializeFirebase() {
         try {
-            FirebaseApp.initializeApp(this)
             auth = FirebaseAuth.getInstance()
             firestore = FirebaseFirestore.getInstance()
             storage = FirebaseStorage.getInstance()
@@ -104,9 +115,9 @@ class MainActivity : ComponentActivity() {
                 .build()
             firestore.firestoreSettings = settings
             
-            Log.d("Firebase", "Firebase initialized successfully")
+            Log.d("Firebase", "Firebase components initialized successfully")
         } catch (e: Exception) {
-            Log.e("Firebase", "Error initializing Firebase: ${e.message}", e)
+            Log.e("Firebase", "Error initializing Firebase components: ${e.message}", e)
         }
     }
 
@@ -122,7 +133,16 @@ class MainActivity : ComponentActivity() {
             
             WebView.setWebContentsDebuggingEnabled(true)
 
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    // When splash screen is loaded, check authentication
+                    if (url?.endsWith("splash.html") == true) {
+                        getCurrentUser()
+                    }
+                }
+            }
+            
             webChromeClient = object : WebChromeClient() {
                 override fun onShowFileChooser(
                     webView: WebView?,
@@ -136,7 +156,7 @@ class MainActivity : ComponentActivity() {
             }
 
             addJavascriptInterface(WebAppInterface(), "AndroidInterface")
-            loadUrl("file:///android_asset/login.html")
+            loadUrl("file:///android_asset/splash.html")
         }
         setContentView(webView)
     }
@@ -184,7 +204,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openImagePicker() {
-        val intent = Intent(Intent.ACTION_PICK).apply {
+        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI).apply {
             type = "image/*"
             putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/jpeg", "image/png"))
         }
@@ -196,17 +216,23 @@ class MainActivity : ComponentActivity() {
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 val bytes = inputStream.readBytes()
                 val base64Image = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
-                webView?.evaluateJavascript(
-                    "handleSelectedImage('data:image/jpeg;base64,$base64Image')",
-                    null
-                )
+                val mimeType = contentResolver.getType(uri) ?: "image/jpeg"
+                
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "handleSelectedImage('data:$mimeType;base64,$base64Image')",
+                        null
+                    )
+                }
             }
         } catch (e: Exception) {
             Log.e("Image", "Error processing image: ${e.message}", e)
-            webView?.evaluateJavascript(
-                "showError('Error processing image')",
-                null
-            )
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Error processing image: ${e.message}')",
+                    null
+                )
+            }
         } finally {
             clearImageCallbacks()
         }
@@ -217,6 +243,35 @@ class MainActivity : ComponentActivity() {
         imageSelectedCallback?.onReceiveValue(null)
         filePathCallback = null
         imageSelectedCallback = null
+    }
+
+    private fun getCurrentUser() {
+        val user = auth.currentUser
+        if (user != null) {
+            firestore.collection("users").document(user.uid)
+                .get()
+                .addOnSuccessListener { document ->
+                    val userData = document.data?.toMutableMap() ?: mutableMapOf()
+                    userData["uid"] = user.uid
+                    
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "updateUserInterface(${Gson().toJson(userData)})",
+                            null
+                        )
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Auth", "Failed to get user data: ${e.message}", e)
+                    runOnUiThread {
+                        webView?.loadUrl("file:///android_asset/login.html")
+                    }
+                }
+        } else {
+            runOnUiThread {
+                webView?.loadUrl("file:///android_asset/login.html")
+            }
+        }
     }
 
     inner class WebAppInterface {
