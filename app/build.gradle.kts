@@ -62,12 +62,13 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
-    // Firebase Libraries
-    implementation("com.google.firebase:firebase-firestore-ktx:24.6.0") // Firestore integration
-    implementation("com.google.firebase:firebase-auth-ktx:21.3.0")     // Firebase Auth
-    implementation("com.google.firebase:firebase-core:21.1.1")         // Firebase Core
-    implementation("com.google.firebase:firebase-analytics-ktx:21.2.0") // Firebase Analytics
-
+      // Firebase Libraries
+      implementation("com.google.firebase:firebase-firestore-ktx:24.6.0") // Firestore integration
+      implementation("com.google.firebase:firebase-auth-ktx:21.3.0")     // Firebase Auth
+      implementation("com.google.firebase:firebase-core:21.1.1")         // Firebase Core
+      implementation("com.google.firebase:firebase-analytics-ktx:21.2.0") // Firebase Analytics
+      implementation("com.google.firebase:firebase-storage-ktx:20.3.0")   // Firebase Storage
+    
     // Telephony and SMS Handling
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
