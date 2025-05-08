@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isFarmer() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'farmer';
+    }
+
+    // User rules
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isOwner(userId);
+      allow delete: if false; // Don't allow user deletion
+    }
+
+    // Product rules
+    match /products/{productId} {
+      allow read: if true; // Anyone can view products
+      allow create: if isSignedIn() && isFarmer();
+      allow update, delete: if isSignedIn() && 
+        isOwner(resource.data.farmerId);
+    }
+
+    // Order rules
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && 
+        (resource.data.buyerId == request.auth.uid || 
+         resource.data.farmerId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && 
+        (resource.data.buyerId == request.auth.uid || 
+         resource.data.farmerId == request.auth.uid);
+    }
+
+    // Chat rules
+    match /chats/{chatId} {
+      allow read: if isSignedIn() && 
+        chatId.matches(request.auth.uid + '-.*|.*-' + request.auth.uid);
+      allow write: if isSignedIn() && 
+        chatId.matches(request.auth.uid + '-.*|.*-' + request.auth.uid);
+      
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && 
+          chatId.matches(request.auth.uid + '-.*|.*-' + request.auth.uid);
+        allow create: if isSignedIn() && 
+          request.resource.data.senderId == request.auth.uid;
+      }
+    }
+  }
+}

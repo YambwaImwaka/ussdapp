@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Farm Fresh Zambia</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F1F2F6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            width: 100%;
+            box-sizing: border-box;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .username {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .main-content {
+            margin-top: 80px;
+            padding: 24px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .profile-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+        }
+
+        .profile-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .profile-image-container {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 16px;
+        }
+
+        .profile-image {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #45A29E;
+        }
+
+        .profile-image-upload {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: #45A29E;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: white;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #D1D8E0;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            border-color: #45A29E;
+            outline: none;
+        }
+
+        .user-type-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #e9ecef;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #495057;
+            margin-top: 8px;
+        }
+
+        .save-button {
+            background: #45A29E;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 16px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .save-button:hover {
+            background: #3d8f8a;
+        }
+
+        .back-button {
+            color: #45A29E;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="home.html" class="back-button">← Back to Home</a>
+        <div class="user-info">
+            <span class="username" id="userLogin">user</span>
+            <span class="timestamp" id="timestamp">2025-05-08 11:40:48</span>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="profile-container">
+            <div class="profile-header">
+                <div class="profile-image-container">
+                    <img id="profileImage" src="default_profile.png" alt="Profile" class="profile-image">
+                    <div class="profile-image-upload" onclick="document.getElementById('imageInput').click()">
+                        +
+                    </div>
+                    <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="handleImageUpload(this)">
+                </div>
+                <h1 id="displayNameHeader">Loading...</h1>
+                <div id="userTypeBadge" class="user-type-badge">Loading...</div>
+            </div>
+
+            <form id="profileForm" onsubmit="saveProfile(event)">
+                <div class="form-group">
+                    <label for="displayName">Display Name</label>
+                    <input type="text" id="displayName" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" required readonly>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">Phone Number (Optional)</label>
+                    <input type="tel" id="phone" pattern="[0-9+]+">
+                </div>
+
+                <button type="submit" class="save-button">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function updateTimestamp() {
+            const now = new Date();
+            const formatted = now.getUTCFullYear() + '-' + 
+                            String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                            String(now.getUTCDate()).padStart(2, '0') + ' ' +
+                            String(now.getUTCHours()).padStart(2, '0') + ':' +
+                            String(now.getUTCMinutes()).padStart(2, '0') + ':' +
+                            String(now.getUTCSeconds()).padStart(2, '0');
+            document.getElementById('timestamp').textContent = formatted;
+        }
+
+        function handleImageUpload(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('profileImage').src = e.target.result;
+                    if (window.AndroidInterface && window.AndroidInterface.uploadProfileImage) {
+                        window.AndroidInterface.uploadProfileImage(e.target.result);
+                    }
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function saveProfile(event) {
+            event.preventDefault();
+            const formData = {
+                displayName: document.getElementById('displayName').value,
+                phone: document.getElementById('phone').value
+            };
+
+            if (window.AndroidInterface && window.AndroidInterface.updateProfile) {
+                window.AndroidInterface.updateProfile(JSON.stringify(formData));
+            }
+        }
+
+        function updateUserInterface(userData) {
+            document.getElementById('userLogin').textContent = userData.displayName;
+            document.getElementById('displayNameHeader').textContent = userData.displayName;
+            document.getElementById('displayName').value = userData.displayName;
+            document.getElementById('email').value = userData.email;
+            document.getElementById('phone').value = userData.phone || '';
+            document.getElementById('userTypeBadge').textContent = 
+                userData.userType.charAt(0).toUpperCase() + userData.userType.slice(1);
+            
+            if (userData.profileImage) {
+                document.getElementById('profileImage').src = userData.profileImage;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTimestamp();
+            setInterval(updateTimestamp, 1000);
+            
+            if (window.AndroidInterface && window.AndroidInterface.getCurrentUser) {
+                window.AndroidInterface.getCurrentUser();
+            }
+        });
+    </script>
+</body>
+</html>

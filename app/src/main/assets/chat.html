@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - Farm Fresh Zambia</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F1F2F6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .navbar {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            width: 100%;
+            box-sizing: border-box;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .username {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .chat-container {
+            margin-top: 64px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            width: 100%;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .chat-header {
+            padding: 16px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .chat-messages {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            position: relative;
+            word-wrap: break-word;
+        }
+
+        .message.sent {
+            background: #45A29E;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.received {
+            background: #f1f1f1;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-time {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+
+        .chat-input {
+            padding: 16px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 12px;
+        }
+
+        .chat-input input {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid #D1D8E0;
+            border-radius: 24px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .chat-input button {
+            background: #45A29E;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .chat-input button:hover {
+            background: #3d8f8a;
+        }
+
+        .back-button {
+            color: #45A29E;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="javascript:history.back()" class="back-button">← Back</a>
+        <div class="user-info">
+            <span class="username" id="userLogin">user</span>
+            <span class="timestamp" id="timestamp">2025-05-08 11:40:48</span>
+        </div>
+    </nav>
+
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2 id="chatWithUser">Chat with...</h2>
+        </div>
+        
+        <div class="chat-messages" id="messageContainer">
+            <!-- Messages will be loaded here -->
+        </div>
+
+        <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        let chatId = null;
+        let otherUserId = null;
+
+        function updateTimestamp() {
+            const now = new Date();
+            const formatted = now.getUTCFullYear() + '-' + 
+                            String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                            String(now.getUTCDate()).padStart(2, '0') + ' ' +
+                            String(now.getUTCHours()).padStart(2, '0') + ':' +
+                            String(now.getUTCMinutes()).padStart(2, '0') + ':' +
+                            String(now.getUTCSeconds()).padStart(2, '0');
+            document.getElementById('timestamp').textContent = formatted;
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (message && window.AndroidInterface && window.AndroidInterface.sendMessage) {
+                window.AndroidInterface.sendMessage(chatId, message);
+                input.value = '';
+            }
+        }
+
+        function renderMessage(message) {
+            const container = document.getElementById('messageContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${message.isSent ? 'sent' : 'received'}`;
+            
+            const time = new Date(message.timestamp).toLocaleTimeString();
+            messageDiv.innerHTML = `
+                ${message.text}
+                <div class="message-time">${time}</div>
+            `;
+            
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function initializeChat() {
+            const urlParams = new URLSearchParams(window.location.search);
+            otherUserId = urlParams.get('farmerId') || urlParams.get('userId');
+            
+            if (window.AndroidInterface && window.AndroidInterface.initializeChat) {
+                window.AndroidInterface.initializeChat(otherUserId);
+            }
+        }
+
+        function updateChatHeader(userData) {
+            document.getElementById('chatWithUser').textContent = `Chat with ${userData.displayName}`;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTimestamp();
+            setInterval(updateTimestamp, 1000);
+            initializeChat();
+        });
+    </script>
+</body>
+</html>

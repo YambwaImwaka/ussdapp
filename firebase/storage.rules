@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    // Profile images
+    match /profile_images/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && 
+                   request.auth.uid == userId && 
+                   isImage();
+    }
+
+    // Product images
+    match /product_images/{imageId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage();
+    }
+  }
+}

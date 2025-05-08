@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farm Fresh Zambia - Home</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F1F2F6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            width: 100%;
+            box-sizing: border-box;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .timestamp {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .main-content {
+            margin-top: 80px;
+            padding: 20px;
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .product-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .product-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .product-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .product-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .product-price {
+            color: #45A29E;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .product-farmer {
+            font-size: 14px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .floating-action-button {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #45A29E;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            border: none;
+        }
+
+        .floating-action-button:hover {
+            background: #3d8f8a;
+        }
+
+        .user-menu {
+            position: relative;
+            display: inline-block;
+        }
+
+        .menu-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: white;
+            min-width: 160px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            padding: 8px 0;
+        }
+
+        .menu-content.show {
+            display: block;
+        }
+
+        .menu-item {
+            padding: 12px 16px;
+            display: block;
+            color: #333;
+            text-decoration: none;
+            transition: background-color 0.3s ease;
+        }
+
+        .menu-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding: 0 20px;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .tab.active {
+            background: #45A29E;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="timestamp" id="timestamp"></div>
+        <div class="user-menu">
+            <div class="user-info" onclick="toggleMenu()">
+                <span id="userName">Loading...</span>
+                <span>▼</span>
+            </div>
+            <div class="menu-content" id="userMenu">
+                <a href="profile.html" class="menu-item">Profile</a>
+                <a href="orders.html" class="menu-item">My Orders</a>
+                <a href="#" class="menu-item" onclick="logout()">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="tab-bar">
+            <div class="tab active" onclick="switchTab('all')">All Products</div>
+            <div class="tab" onclick="switchTab('myProducts')" id="farmerTab" style="display: none;">My Products</div>
+        </div>
+        <div class="products-grid" id="productsGrid">
+            <!-- Products will be loaded here -->
+        </div>
+    </div>
+
+    <button class="floating-action-button" id="addProductButton" onclick="addProduct()" style="display: none;">+</button>
+
+    <script>
+        let currentUserData = null;
+
+        function updateTimestamp() {
+            const now = new Date();
+            const formatted = now.getUTCFullYear() + '-' + 
+                            String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                            String(now.getUTCDate()).padStart(2, '0') + ' ' +
+                            String(now.getUTCHours()).padStart(2, '0') + ':' +
+                            String(now.getUTCMinutes()).padStart(2, '0') + ':' +
+                            String(now.getUTCSeconds()).padStart(2, '0');
+            document.getElementById('timestamp').textContent = formatted;
+        }
+
+        function toggleMenu() {
+            document.getElementById('userMenu').classList.toggle('show');
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            loadProducts(tab);
+        }
+
+        function loadProducts(type = 'all') {
+            if (window.AndroidInterface && window.AndroidInterface.getProducts) {
+                window.AndroidInterface.getProducts(type);
+            }
+        }
+
+        function renderProducts(products) {
+            const grid = document.getElementById('productsGrid');
+            grid.innerHTML = '';
+
+            products.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.innerHTML = `
+                    <img src="${product.imageUrl}" class="product-image" alt="${product.name}">
+                    <div class="product-title">${product.name}</div>
+                    <div class="product-price">K${product.price}</div>
+                    <div class="product-farmer">By ${product.farmerName}</div>
+                `;
+                card.onclick = () => window.location.href = `product_detail.html?id=${product.id}`;
+                grid.appendChild(card);
+            });
+        }
+
+        function updateUserInterface(userData) {
+            currentUserData = userData;
+            document.getElementById('userName').textContent = userData.displayName;
+            
+            if (userData.userType === 'farmer') {
+                document.getElementById('farmerTab').style.display = 'block';
+                document.getElementById('addProductButton').style.display = 'flex';
+            }
+        }
+
+        function addProduct() {
+            window.location.href = 'add_product.html';
+        }
+
+        function logout() {
+            if (window.AndroidInterface && window.AndroidInterface.logout) {
+                window.AndroidInterface.logout();
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTimestamp();
+            setInterval(updateTimestamp, 1000);
+            
+            if (window.AndroidInterface && window.AndroidInterface.getCurrentUser) {
+                window.AndroidInterface.getCurrentUser();
+            }
+            
+            loadProducts('all');
+        });
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.user-menu')) {
+                document.getElementById('userMenu').classList.remove('show');
+            }
+        });
+    </script>
+</body>
+</html>

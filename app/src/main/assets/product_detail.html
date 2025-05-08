@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Details - Farm Fresh Zambia</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F1F2F6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            box-sizing: border-box;
+            z-index: 1000;
+        }
+
+        .main-content {
+            margin-top: 64px;
+            padding: 24px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .product-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .product-image {
+            width: 100%;
+            max-height: 400px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+
+        .product-info {
+            display: grid;
+            gap: 20px;
+        }
+
+        .product-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .product-price {
+            font-size: 20px;
+            color: #45A29E;
+            font-weight: 600;
+        }
+
+        .product-description {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .farmer-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .order-button {
+            background: #45A29E;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 16px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 24px;
+        }
+
+        .order-button:hover {
+            background: #3d8f8a;
+        }
+
+        .back-button {
+            color: #45A29E;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chat-button {
+            background: #fff;
+            color: #45A29E;
+            border: 2px solid #45A29E;
+            border-radius: 8px;
+            padding: 14px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 12px;
+        }
+
+        .chat-button:hover {
+            background: #45A29E;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="home.html" class="back-button">← Back to Products</a>
+        <div class="timestamp" id="timestamp"></div>
+    </nav>
+
+    <div class="main-content">
+        <div class="product-container" id="productDetails">
+            <!-- Product details will be loaded here -->
+        </div>
+    </div>
+
+    <script>
+        let currentProduct = null;
+        let currentUser = null;
+
+        function updateTimestamp() {
+            document.getElementById('timestamp').textContent = 
+                new Date().toISOString().replace('T', ' ').substring(0, 19);
+        }
+
+        function loadProductDetails() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const productId = urlParams.get('id');
+            
+            if (window.AndroidInterface && window.AndroidInterface.getProductDetails) {
+                window.AndroidInterface.getProductDetails(productId);
+            }
+        }
+
+        function renderProduct(product) {
+            currentProduct = product;
+            const container = document.getElementById('productDetails');
+            
+            container.innerHTML = `
+                <img src="${product.imageUrl}" class="product-image" alt="${product.name}">
+                <div class="product-info">
+                    <h1 class="product-title">${product.name}</h1>
+                    <div class="product-price">K${product.price}</div>
+                    <p class="product-description">${product.description}</p>
+                    
+                    <div class="farmer-info">
+                        <div>
+                            <strong>Seller:</strong> ${product.farmerName}
+                        </div>
+                    </div>
+                    
+                    ${currentUser?.userType === 'consumer' ? `
+                        <button onclick="placeOrder()" class="order-button">Place Order</button>
+                        <button onclick="startChat()" class="chat-button">Chat with Seller</button>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function placeOrder() {
+            if (window.AndroidInterface && window.AndroidInterface.placeOrder) {
+                window.AndroidInterface.placeOrder(currentProduct.id);
+            }
+        }
+
+        function startChat() {
+            window.location.href = `chat.html?farmerId=${currentProduct.farmerId}`;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTimestamp();
+            setInterval(updateTimestamp, 1000);
+            
+            if (window.AndroidInterface && window.AndroidInterface.getCurrentUser) {
+                window.AndroidInterface.getCurrentUser();
+            }
+            
+            loadProductDetails();
+        });
+
+        function updateUserInterface(userData) {
+            currentUser = userData;
+            loadProductDetails(); // Reload to update UI based on user type
+        }
+    </script>
+</body>
+</html>

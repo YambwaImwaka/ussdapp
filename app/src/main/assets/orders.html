@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Orders - Farm Fresh Zambia</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F1F2F6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            width: 100%;
+            box-sizing: border-box;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .username {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .main-content {
+            margin-top: 80px;
+            padding: 24px;
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .orders-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .order-item {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .order-item:last-child {
+            border-bottom: none;
+        }
+
+        .order-image {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .order-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .order-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .order-meta {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .order-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-confirmed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-completed {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .back-button {
+            color: #45A29E;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .order-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .confirm-button {
+            background: #45A29E;
+            color: white;
+        }
+
+        .cancel-button {
+            background: #dc3545;
+            color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="home.html" class="back-button">← Back to Home</a>
+        <div class="user-info">
+            <span class="username" id="userLogin">User</span>
+            <span class="timestamp" id="timestamp">2025-05-08 11:36:55</span>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="orders-container" id="ordersContainer">
+            <!-- Orders will be loaded here -->
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+
+        function updateTimestamp() {
+            const now = new Date();
+            const formatted = now.getUTCFullYear() + '-' + 
+                            String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                            String(now.getUTCDate()).padStart(2, '0') + ' ' +
+                            String(now.getUTCHours()).padStart(2, '0') + ':' +
+                            String(now.getUTCMinutes()).padStart(2, '0') + ':' +
+                            String(now.getUTCSeconds()).padStart(2, '0');
+            document.getElementById('timestamp').textContent = formatted;
+        }
+
+        function loadOrders() {
+            if (window.AndroidInterface && window.AndroidInterface.getOrders) {
+                window.AndroidInterface.getOrders();
+            }
+        }
+
+        function renderOrders(orders) {
+            const container = document.getElementById('ordersContainer');
+            
+            if (!orders || orders.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h2>No orders found</h2>
+                        <p>When you place or receive orders, they will appear here.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = orders.map(order => `
+                <div class="order-item">
+                    <img src="${order.productImage}" class="order-image" alt="${order.productName}">
+                    <div class="order-details">
+                        <div class="order-title">${order.productName}</div>
+                        <div class="order-meta">
+                            Order #${order.orderId}<br>
+                            ${currentUser.userType === 'farmer' ? 
+                                `Ordered by: ${order.buyerName}` : 
+                                `Sold by: ${order.farmerName}`}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="order-status status-${order.status.toLowerCase()}">${order.status}</span>
+                        ${currentUser.userType === 'farmer' && order.status === 'PENDING' ? `
+                            <div class="order-actions">
+                                <button onclick="updateOrderStatus('${order.orderId}', 'CONFIRMED')" 
+                                        class="action-button confirm-button">Confirm</button>
+                                <button onclick="updateOrderStatus('${order.orderId}', 'CANCELLED')" 
+                                        class="action-button cancel-button">Cancel</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateOrderStatus(orderId, status) {
+            if (window.AndroidInterface && window.AndroidInterface.updateOrderStatus) {
+                window.AndroidInterface.updateOrderStatus(orderId, status);
+            }
+        }
+
+        function updateUserInterface(userData) {
+            currentUser = userData;
+            document.getElementById('userLogin').textContent = userData.displayName;
+            loadOrders();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTimestamp();
+            setInterval(updateTimestamp, 1000);
+            
+            if (window.AndroidInterface && window.AndroidInterface.getCurrentUser) {
+                window.AndroidInterface.getCurrentUser();
+            }
+        });
+    </script>
+</body>
+</html>

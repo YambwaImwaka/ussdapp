@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Farm Fresh Zambia</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F1F2F6;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .auth-container {
+            width: 90%;
+            max-width: 400px;
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 24px;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 16px;
+            border: 1px solid #D1D8E0;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            border-color: #45A29E;
+            outline: none;
+        }
+
+        .user-type-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .user-type-option {
+            position: relative;
+        }
+
+        .user-type-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+        }
+
+        .user-type-option label {
+            display: block;
+            padding: 16px;
+            text-align: center;
+            background: #fff;
+            border: 2px solid #D1D8E0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-type-option input[type="radio"]:checked + label {
+            background: #45A29E;
+            color: white;
+            border-color: #45A29E;
+        }
+
+        .user-type-option label:hover {
+            border-color: #45A29E;
+        }
+
+        .auth-button {
+            width: 100%;
+            padding: 16px;
+            background: #45A29E;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .auth-button:hover {
+            background: #3d8f8a;
+        }
+
+        .auth-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .auth-link a {
+            color: #45A29E;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-link a:hover {
+            text-decoration: underline;
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h1>Create Account</h1>
+        <div class="form-group">
+            <label for="displayName">Display Name</label>
+            <input type="text" id="displayName" required placeholder="Enter your display name">
+        </div>
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" required placeholder="Enter your email">
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" required placeholder="Create a password">
+        </div>
+        <div class="form-group">
+            <label>I am a:</label>
+            <div class="user-type-selector">
+                <div class="user-type-option">
+                    <input type="radio" id="farmer" name="userType" value="farmer">
+                    <label for="farmer">Farmer</label>
+                </div>
+                <div class="user-type-option">
+                    <input type="radio" id="consumer" name="userType" value="consumer">
+                    <label for="consumer">Consumer</label>
+                </div>
+            </div>
+        </div>
+        <button class="auth-button" onclick="register()">Create Account</button>
+        <div class="auth-link">
+            <a href="login.html">Already have an account? Login</a>
+        </div>
+    </div>
+
+    <script>
+        function register() {
+            const displayName = document.getElementById('displayName').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const userType = document.querySelector('input[name="userType"]:checked')?.value;
+
+            if (!displayName || !email || !password || !userType) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            if (window.AndroidInterface && window.AndroidInterface.registerUser) {
+                window.AndroidInterface.registerUser(email, password, displayName, userType);
+            }
+        }
+
+        function showError(message) {
+            alert(message);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farm Fresh Zambia</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #F1F2F6;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        .splash-container {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .app-title {
+            font-size: 24px;
+            color: #45A29E;
+            margin-bottom: 20px;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #45A29E;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="splash-container">
+        <h1 class="app-title">Farm Fresh Zambia</h1>
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if user is already logged in
+            if (window.AndroidInterface && window.AndroidInterface.getCurrentUser) {
+                window.AndroidInterface.getCurrentUser();
+            }
+        });
+
+        // This function will be called from MainActivity when user data is retrieved
+        function updateUserInterface(userData) {
+            if (userData && userData.uid) {
+                window.location.href = 'home.html';
+            } else {
+                window.location.href = 'login.html';
+            }
+        }
+
+        // Fallback in case no response is received
+        setTimeout(() => {
+            window.location.href = 'login.html';
+        }, 3000);
+    </script>
+</body>
+</html>
