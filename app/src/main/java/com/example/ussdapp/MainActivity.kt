@@ -19,12 +19,14 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.Timestamp
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import com.google.gson.Gson
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
@@ -33,8 +35,12 @@ class MainActivity : ComponentActivity() {
     private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
     private val storage: FirebaseStorage by lazy { FirebaseStorage.getInstance() }
     private val gson: Gson by lazy { Gson() }
+    private val dateFormat: SimpleDateFormat by lazy { 
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }
+    }
 
-    // Image picker launcher
     private val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -67,7 +73,6 @@ class MainActivity : ComponentActivity() {
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    // Enable console logging
                     webView?.evaluateJavascript("""
                         console.log = function(message) {
                             AndroidInterface.logToConsole(message);
@@ -112,20 +117,10 @@ class MainActivity : ComponentActivity() {
                 
                 runOnUiThread {
                     webView?.evaluateJavascript(
-                        """
-                        (function() {
-                            try {
-                                handleSelectedImage('data:$mimeType;base64,$base64Image');
-                                return true;
-                            } catch(e) {
-                                console.error('Error handling image:', e);
-                                return e.toString();
-                            }
-                        })();
-                        """.trimIndent(),
+                        "handleSelectedImage('data:$mimeType;base64,$base64Image')",
                         { result ->
-                            if (result != "true") {
-                                Log.e("ImageSelection", "JavaScript handler returned: $result")
+                            if (result == "null") {
+                                Log.e("ImageSelection", "JavaScript handler returned null")
                                 webView?.evaluateJavascript(
                                     "showError('Failed to process image')",
                                     null
@@ -158,7 +153,7 @@ class MainActivity : ComponentActivity() {
                 stream.reset()
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, stream)
                 compressedBytes = stream.toByteArray()
-                quality -= 10
+                quality -= 5
             } while (compressedBytes.size > maxSizeKB * 1024 && quality > 20)
             
             Log.d("ImageCompression", 
@@ -374,10 +369,12 @@ class MainActivity : ComponentActivity() {
                             try {
                                 val data = doc.data.toMutableMap()
                                 data["id"] = doc.id
-                                val timestamp = data["createdAt"] as? Timestamp
-                                if (timestamp != null) {
-                                    data["createdAt"] = timestamp.toDate().toString()
+                                
+                                // Convert Firestore timestamp to formatted date string
+                                (data["createdAt"] as? com.google.firebase.Timestamp)?.let { timestamp ->
+                                    data["createdAt"] = dateFormat.format(timestamp.toDate())
                                 }
+                                
                                 data
                             } catch (e: Exception) {
                                 Log.e("Products", "Error processing document ${doc.id}: ${e.message}")
