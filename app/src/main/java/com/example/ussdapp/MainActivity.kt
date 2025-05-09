@@ -11,26 +11,30 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.Timestamp
 import com.google.firebase.storage.FirebaseStorage
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.storage.StorageMetadata
-import org.json.JSONObject
-import java.util.UUID
 import com.google.gson.Gson
-import androidx.activity.result.contract.ActivityResultContracts
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.util.UUID
 
 class MainActivity : ComponentActivity() {
     private var webView: WebView? = null
-    private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
-    private val storage = FirebaseStorage.getInstance()
-    
+    private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
+    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    private val storage: FirebaseStorage by lazy { FirebaseStorage.getInstance() }
+    private val gson: Gson by lazy { Gson() }
+
+    // Image picker launcher
     private val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -57,12 +61,13 @@ class MainActivity : ComponentActivity() {
                 databaseEnabled = true
                 mediaPlaybackRequiresUserGesture = false
             }
-            
+
             WebView.setWebContentsDebuggingEnabled(true)
 
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    // Enable console logging
                     webView?.evaluateJavascript("""
                         console.log = function(message) {
                             AndroidInterface.logToConsole(message);
@@ -91,7 +96,7 @@ class MainActivity : ComponentActivity() {
         }.toTypedArray()
 
         if (permissionsToRequest.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, permissionsToRequest, 123)
+            ActivityCompat.requestPermissions(this, permissionsToRequest, PERMISSIONS_REQUEST_CODE)
         }
     }
 
@@ -147,16 +152,14 @@ class MainActivity : ComponentActivity() {
         
         try {
             val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-            val stream = java.io.ByteArrayOutputStream()
-            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, stream)
-            compressedBytes = stream.toByteArray()
+            val stream = ByteArrayOutputStream()
             
-            while (compressedBytes.size > maxSizeKB * 1024 && quality > 20) {
+            do {
                 stream.reset()
-                quality -= 10
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, stream)
                 compressedBytes = stream.toByteArray()
-            }
+                quality -= 10
+            } while (compressedBytes.size > maxSizeKB * 1024 && quality > 20)
             
             Log.d("ImageCompression", 
                 "Original: ${imageBytes.size/1024}KB, " +
@@ -210,25 +213,10 @@ class MainActivity : ComponentActivity() {
                 val password = data.getString("password")
 
                 auth.signInWithEmailAndPassword(email, password)
-                    .addOnSuccessListener {
-                        val user = it.user
+                    .addOnSuccessListener { authResult ->
+                        val user = authResult.user
                         if (user != null) {
-                            firestore.collection("users").document(user.uid).get()
-                                .addOnSuccessListener { document ->
-                                    val userData = document.data
-                                    userData?.put("uid", user.uid)
-                                    userData?.put("email", user.email ?: "")
-                                    
-                                    runOnUiThread {
-                                        webView?.evaluateJavascript(
-                                            "handleLoginSuccess(${Gson().toJson(userData)})",
-                                            null
-                                        )
-                                    }
-                                }
-                                .addOnFailureListener { e ->
-                                    throw e
-                                }
+                            getUserData(user)
                         }
                     }
                     .addOnFailureListener { e ->
@@ -251,6 +239,31 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        private fun getUserData(user: FirebaseUser) {
+            firestore.collection("users").document(user.uid).get()
+                .addOnSuccessListener { document ->
+                    val userData = document.data?.toMutableMap() ?: mutableMapOf()
+                    userData["uid"] = user.uid
+                    userData["email"] = user.email ?: ""
+                    
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "handleLoginSuccess(${gson.toJson(userData)})",
+                            null
+                        )
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Auth", "Error getting user data: ${e.message}", e)
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "handleLoginError('Failed to get user data')",
+                            null
+                        )
+                    }
+                }
+        }
+
         @JavascriptInterface
         fun registerUser(userData: String) {
             try {
@@ -261,8 +274,8 @@ class MainActivity : ComponentActivity() {
                 val displayName = data.getString("displayName")
 
                 auth.createUserWithEmailAndPassword(email, password)
-                    .addOnSuccessListener {
-                        val user = it.user
+                    .addOnSuccessListener { authResult ->
+                        val user = authResult.user
                         if (user != null) {
                             val userDoc = hashMapOf(
                                 "email" to email,
@@ -318,28 +331,7 @@ class MainActivity : ComponentActivity() {
         fun getCurrentUser() {
             val user = auth.currentUser
             if (user != null) {
-                firestore.collection("users").document(user.uid).get()
-                    .addOnSuccessListener { document ->
-                        val userData = document.data?.toMutableMap() ?: mutableMapOf()
-                        userData["uid"] = user.uid
-                        userData["email"] = user.email ?: ""
-                        
-                        runOnUiThread {
-                            webView?.evaluateJavascript(
-                                "updateUserInterface(${Gson().toJson(userData)})",
-                                null
-                            )
-                        }
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e("Auth", "Error getting user data: ${e.message}", e)
-                        runOnUiThread {
-                            webView?.evaluateJavascript(
-                                "showError('Failed to get user data')",
-                                null
-                            )
-                        }
-                    }
+                getUserData(user)
             }
         }
 
@@ -400,8 +392,8 @@ class MainActivity : ComponentActivity() {
                                 """
                                 (function() {
                                     try {
-                                        console.log('Products data:', ${Gson().toJson(products)});
-                                        renderProducts(${Gson().toJson(products)});
+                                        console.log('Products data:', ${gson.toJson(products)});
+                                        renderProducts(${gson.toJson(products)});
                                         return true;
                                     } catch(e) {
                                         console.error('Error rendering products:', e);
@@ -441,4 +433,116 @@ class MainActivity : ComponentActivity() {
         fun addProduct(productData: String) {
             try {
                 Log.d("ProductCreation", "Starting product creation")
-                val
+                val data = JSONObject(productData)
+                val user = auth.currentUser
+                
+                if (user == null) {
+                    throw Exception("Please log in to create products")
+                }
+
+                // Validate required fields
+                if (!data.has("name") || data.getString("name").isBlank()) {
+                    throw Exception("Product name is required")
+                }
+                if (!data.has("price") || data.getDouble("price") <= 0) {
+                    throw Exception("Valid price is required")
+                }
+                if (!data.has("description") || data.getString("description").isBlank()) {
+                    throw Exception("Product description is required")
+                }
+                if (!data.has("image") || data.getString("image").isBlank()) {
+                    throw Exception("Product image is required")
+                }
+
+                // Extract base64 image data
+                val imageData = data.getString("image").let {
+                    if (it.contains("base64,")) {
+                        it.split("base64,")[1]
+                    } else {
+                        it
+                    }
+                }.trim()
+
+                Log.d("ProductCreation", "Processing image...")
+                val imageBytes = android.util.Base64.decode(imageData, android.util.Base64.DEFAULT)
+                val compressedBytes = compressImage(imageBytes)
+                val filename = "product_images/${UUID.randomUUID()}.jpg"
+                
+                // Create storage reference
+                val imageRef = storage.reference.child(filename)
+                val metadata = StorageMetadata.Builder()
+                    .setContentType("image/jpeg")
+                    .build()
+
+                // Upload image
+                imageRef.putBytes(compressedBytes, metadata)
+                    .addOnProgressListener { taskSnapshot ->
+                        val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
+                        Log.d("Upload", "Progress: $progress%")
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "updateProgress($progress)",
+                                null
+                            )
+                        }
+                    }
+                    .addOnSuccessListener { taskSnapshot ->
+                        Log.d("Upload", "Image upload successful")
+                        imageRef.downloadUrl.addOnSuccessListener { uri ->
+                            // Create product document
+                            val product = hashMapOf(
+                                "name" to data.getString("name"),
+                                "price" to data.getDouble("price"),
+                                "description" to data.getString("description"),
+                                "imageUrl" to uri.toString(),
+                                "farmerId" to user.uid,
+                                "farmerName" to (user.displayName ?: "Unknown Farmer"),
+                                "createdAt" to FieldValue.serverTimestamp()
+                            )
+
+                            // Add to Firestore
+                            firestore.collection("products")
+                                .add(product)
+                                .addOnSuccessListener { documentRef ->
+                                    Log.d("ProductCreation", "Product created with ID: ${documentRef.id}")
+                                    runOnUiThread {
+                                        webView?.loadUrl("file:///android_asset/home.html")
+                                    }
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("ProductCreation", "Failed to create product: ${e.message}", e)
+                                    runOnUiThread {
+                                        webView?.evaluateJavascript(
+                                            "showError('Failed to create product: ${e.message}')",
+                                            null
+                                        )
+                                    }
+                                }
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Upload", "Image upload failed: ${e.message}", e)
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "showError('Failed to upload image: ${e.message}')",
+                                null
+                            )
+                        }
+                    }
+
+            } catch (e: Exception) {
+                Log.e("ProductCreation", "Error: ${e.message}", e)
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('${e.message?.replace("'", "\\'")}')",
+                        null
+                    )
+                }
+            }
+        }
+    }
+
+    companion object {
+        private const val PERMISSIONS_REQUEST_CODE = 123
+    }
+}
