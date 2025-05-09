@@ -403,75 +403,190 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
-        fun addProduct(productData: String) {
-            try {
-                Log.d("ProductCreation", "Received product data: ${productData.take(200)}...")
-                
-                val data = JSONObject(productData)
-                val user = auth.currentUser
-                
-                if (user == null) throw Exception("User not authenticated")
-                if (!data.has("image")) throw Exception("Missing image data")
-                if (!data.has("name") || data.getString("name").isBlank()) throw Exception("Invalid product name")
-                if (!data.has("price") || data.getDouble("price") <= 0) throw Exception("Invalid price")
-                if (!data.has("description") || data.getString("description").isBlank()) throw Exception("Invalid description")
-
-                val imageParts = data.getString("image").split(",")
-                if (imageParts.size < 2) throw Exception("Invalid image format")
-                val imageData = imageParts.last().trim()
-
-                Log.d("ProductCreation", "Decoding image data (length: ${imageData.length})")
-
-                val imageBytes = try {
-                    android.util.Base64.decode(imageData, android.util.Base64.NO_WRAP)
-                } catch (e: Exception) {
-                    throw Exception("Invalid image encoding: ${e.message}")
-                }
-
-                val storageRef = FirebaseStorage.getInstance().reference
-                val imageRef = storageRef.child("product_images/${UUID.randomUUID()}.jpg")
-
-                val uploadTask = imageRef.putBytes(imageBytes)
-                
-                uploadTask.addOnProgressListener { taskSnapshot ->
-                    val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
-                    webView?.evaluateJavascript("updateUploadProgress($progress)", null)
-                }
-
-                uploadTask.addOnSuccessListener { taskSnapshot ->
-                    imageRef.downloadUrl.addOnSuccessListener { uri ->
-                        val product = hashMapOf(
-                            "name" to data.getString("name"),
-                            "price" to data.getDouble("price"),
-                            "description" to data.getString("description"),
-                            "imageUrl" to uri.toString(),
-                            "farmerId" to user.uid,
-                            "farmerName" to (user.displayName ?: "Unknown Farmer"),
-                            "createdAt" to Date(),
-                            "status" to "active"
-                        )
-
-                        FirebaseFirestore.getInstance().collection("products")
-                            .add(product)
-                            .addOnSuccessListener {
-                                Log.d("ProductCreation", "Product created successfully")
-                                runOnUiThread {
-                                    webView?.evaluateJavascript("hideLoading()", null)
-                                    webView?.loadUrl("file:///android_asset/home.html")
-                                }
-                            }
-                            .addOnFailureListener { e ->
-                                handleError("Firestore save failed: ${e.message}", e)
-                            }
-                    }
-                }.addOnFailureListener { e ->
-                    handleError("Image upload failed: ${e.message}", e)
-                }
-
-            } catch (e: Exception) {
-                handleError("Product creation error: ${e.message}", e)
-            }
+  fun addProduct(productData: String) {
+    try {
+        Log.d("ProductCreation", "Starting product creation")
+        val data = JSONObject(productData)
+        val user = auth.currentUser
+        
+        if (user == null) {
+            throw Exception("Please log in to create products")
         }
+
+        // Validate required fields
+        if (!data.has("name") || data.getString("name").isBlank()) {
+            throw Exception("Product name is required")
+        }
+        if (!data.has("price") || data.getDouble("price") <= 0) {
+            throw Exception("Valid price is required")
+        }
+        if (!data.has("description") || data.getString("description").isBlank()) {
+            throw Exception("Product description is required")
+        }
+        if (!data.has("image") || data.getString("image").isBlank()) {
+            throw Exception("Product image is required")
+        }
+
+        // Extract base64 image data
+        val imageData = data.getString("image").let {
+            if (it.contains("base64,")) {
+                it.split("base64,")[1]
+            } else {
+                it
+            }
+        }.trim()
+
+        Log.d("ProductCreation", "Processing image...")
+        val imageBytes = android.util.Base64.decode(imageData, android.util.Base64.DEFAULT)
+        val compressedBytes = compressImage(imageBytes)
+        val filename = "product_images/${UUID.randomUUID()}.jpg"
+        
+        // Create storage reference
+        val imageRef = storage.reference.child(filename)
+        val metadata = StorageMetadata.Builder()
+            .setContentType("image/jpeg")
+            .build()
+
+        // Upload image
+        imageRef.putBytes(compressedBytes, metadata)
+            .addOnProgressListener { taskSnapshot ->
+                val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
+                Log.d("Upload", "Progress: $progress%")
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "updateProgress($progress)",
+                        null
+                    )
+                }
+            }
+            .addOnSuccessListener { taskSnapshot ->
+                Log.d("Upload", "Image upload successful")
+                imageRef.downloadUrl.addOnSuccessListener { uri ->
+                    // Create product document
+                    val product = hashMapOf(
+                        "name" to data.getString("name"),
+                        "price" to data.getDouble("price"),
+                        "description" to data.getString("description"),
+                        "imageUrl" to uri.toString(),
+                        "farmerId" to user.uid,
+                        "farmerName" to (user.displayName ?: "Unknown Farmer"),
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+
+                    // Add to Firestore
+                    firestore.collection("products")
+                        .add(product)
+                        .addOnSuccessListener { documentRef ->
+                            Log.d("ProductCreation", "Product created with ID: ${documentRef.id}")
+                            runOnUiThread {
+                                webView?.loadUrl("file:///android_asset/home.html")
+                            }
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e("ProductCreation", "Failed to create product: ${e.message}", e)
+                            runOnUiThread {
+                                webView?.evaluateJavascript(
+                                    "showError('Failed to create product: ${e.message}')",
+                                    null
+                                )
+                            }
+                        }
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Upload", "Image upload failed: ${e.message}", e)
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Failed to upload image: ${e.message}')",
+                        null
+                    )
+                }
+            }
+
+    } catch (e: Exception) {
+        Log.e("ProductCreation", "Error: ${e.message}", e)
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('${e.message?.replace("'", "\\'")}')",
+                null
+            )
+        }
+    }
+}
+
+@JavascriptInterface
+fun getProducts(type: String = "all") {
+    Log.d("Products", "Fetching products of type: $type")
+    
+    try {
+        val query = when (type) {
+            "myProducts" -> firestore.collection("products")
+                .whereEqualTo("farmerId", auth.currentUser?.uid)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+            else -> firestore.collection("products")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+        }
+
+        query.get()
+            .addOnSuccessListener { documents ->
+                val products = documents.mapNotNull { doc ->
+                    try {
+                        val data = doc.data.toMutableMap()
+                        data["id"] = doc.id
+                        // Handle timestamps
+                        (data["createdAt"] as? Timestamp)?.let {
+                            data["createdAt"] = it.toDate().toString()
+                        }
+                        data
+                    } catch (e: Exception) {
+                        Log.e("Products", "Error processing document ${doc.id}: ${e.message}")
+                        null
+                    }
+                }
+                
+                Log.d("Products", "Retrieved ${products.size} products")
+                
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        """
+                        (function() {
+                            try {
+                                console.log('Products data:', ${Gson().toJson(products)});
+                                renderProducts(${Gson().toJson(products)});
+                                return true;
+                            } catch(e) {
+                                console.error('Error rendering products:', e);
+                                return e.toString();
+                            }
+                        })();
+                        """.trimIndent(),
+                        { result -> 
+                            if (result != "true") {
+                                Log.e("Products", "Error in JavaScript: $result")
+                            }
+                        }
+                    )
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Products", "Failed to fetch products: ${e.message}", e)
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Failed to fetch products: ${e.message}')",
+                        null
+                    )
+                }
+            }
+    } catch (e: Exception) {
+        Log.e("Products", "Error in getProducts: ${e.message}", e)
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('Error fetching products: ${e.message}')",
+                null
+            )
+        }
+    }
+}
 
         private fun handleError(message: String, e: Exception) {
             val sanitizedMessage = message.replace("'", "")
