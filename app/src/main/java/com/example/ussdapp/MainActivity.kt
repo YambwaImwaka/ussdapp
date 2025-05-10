@@ -240,45 +240,38 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun getCurrentUser() {
-    val user = auth.currentUser
-    if (user != null) {
-        firestore.collection("users").document(user.uid)
-            .get()
-            .addOnSuccessListener { document ->
-                val userData = document.data?.toMutableMap() ?: mutableMapOf()
-                // Ensure all required fields are present
-                userData["uid"] = user.uid
-                userData["email"] = user.email
-                userData["displayName"] = user.displayName ?: userData["displayName"]
-                
-                Log.d("Auth", "User data: ${Gson().toJson(userData)}")
-                
-                runOnUiThread {
-                    webView?.evaluateJavascript(
-                        "updateUserInterface(${Gson().toJson(userData)})",
-                        null
-                    )
+        val user = auth.currentUser
+        if (user != null) {
+            firestore.collection("users").document(user.uid)
+                .get()
+                .addOnSuccessListener { document ->
+                    val userData = document.data?.toMutableMap() ?: mutableMapOf()
+                    userData["uid"] = user.uid
+                    userData["email"] = user.email
+                    userData["displayName"] = user.displayName
+                    
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "updateUserInterface(${Gson().toJson(userData)})",
+                            null
+                        )
+                    }
                 }
-            }
-            .addOnFailureListener { e ->
-                Log.e("Auth", "Failed to get user data: ${e.message}", e)
-                runOnUiThread {
-                    webView?.evaluateJavascript(
-                        "showError('Failed to get user data')",
-                        null
-                    )
+                .addOnFailureListener { e ->
+                    Log.e("Auth", "Failed to get user data: ${e.message}", e)
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "showError('Failed to get user data')",
+                            null
+                        )
+                    }
                 }
-            }
-    } else {
-        runOnUiThread {
-            webView?.loadUrl("file:///android_asset/login.html")
         }
     }
-}
 
     inner class WebAppInterface {
         @JavascriptInterface
-        fun loginUser(email: String, password: String) {
+        fun login(email: String, password: String) {
             Log.d("Auth", "Attempting login with email: $email")
             auth.signInWithEmailAndPassword(email, password)
                 .addOnSuccessListener {
@@ -508,9 +501,9 @@ class MainActivity : ComponentActivity() {
         }
         
         
-        // Add to WebAppInterface class in MainActivity.kt
-@JavascriptInterface
-fun getProductDetails(productId: String) {
+              
+        @JavascriptInterface
+        fun getProductDetails(productId: String) {
     Log.d("ProductDetails", "Fetching product: $productId")
     firestore.collection("products").document(productId)
         .get()
@@ -543,8 +536,8 @@ fun getProductDetails(productId: String) {
             }
         }
 }
-
-
+        
+        
 
         @JavascriptInterface
         fun logout() {
