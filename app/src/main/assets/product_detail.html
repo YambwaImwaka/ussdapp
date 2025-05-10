@@ -126,6 +126,63 @@
             background: #45A29E;
             color: white;
         }
+        
+        
+        .quantity-selector {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 20px 0;
+    }
+
+    .quantity-selector label {
+        font-weight: 500;
+        color: #333;
+    }
+
+    .quantity-input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .quantity-btn {
+        width: 36px;
+        height: 36px;
+        border: 1px solid #45A29E;
+        background: white;
+        color: #45A29E;
+        border-radius: 4px;
+        font-size: 18px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+    }
+
+    .quantity-btn:hover {
+        background: #45A29E;
+        color: white;
+    }
+
+    .quantity-value {
+        width: 60px;
+        height: 36px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 16px;
+    }
+
+    .total-price {
+        font-size: 24px;
+        color: #45A29E;
+        font-weight: 600;
+        margin-top: 16px;
+    }
+    
+    
     </style>
 </head>
 <body>
@@ -165,7 +222,6 @@ function loadProductDetails() {
     }
 }
 
-function renderProduct(product) {
     currentProduct = product;
     const container = document.getElementById('productDetails');
     
@@ -173,7 +229,7 @@ function renderProduct(product) {
         <img src="${product.imageUrl}" class="product-image" alt="${product.name}">
         <div class="product-info">
             <h1 class="product-title">${product.name}</h1>
-            <div class="product-price">K${product.price.toFixed(2)}</div>
+            <div class="product-price">K${product.price.toFixed(2)} per unit</div>
             <p class="product-description">${product.description}</p>
             
             <div class="farmer-info">
@@ -183,12 +239,44 @@ function renderProduct(product) {
             </div>
             
             ${currentUser?.userType === 'consumer' ? `
-                <button onclick="placeOrder()" class="order-button">Place Order</button>
+                <div class="quantity-selector">
+                    <label>Quantity:</label>
+                    <div class="quantity-input">
+                        <button class="quantity-btn" onclick="updateQuantity(-1)">-</button>
+                        <input type="number" class="quantity-value" id="quantity" value="1" min="1" onchange="updateTotal()">
+                        <button class="quantity-btn" onclick="updateQuantity(1)">+</button>
+                    </div>
+                </div>
+                <div class="total-price" id="totalPrice">
+                    Total: K${product.price.toFixed(2)}
+                </div>
+                <button onclick="goToCheckout()" class="order-button">Proceed to Checkout</button>
                 <button onclick="startChat()" class="chat-button">Chat with Seller</button>
             ` : ''}
         </div>
     `;
+    updateTotal();
 }
+
+function updateQuantity(change) {
+    const quantityInput = document.getElementById('quantity');
+    const currentValue = parseInt(quantityInput.value) || 1;
+    const newValue = Math.max(1, currentValue + change);
+    quantityInput.value = newValue;
+    updateTotal();
+}
+
+function updateTotal() {
+    const quantity = parseInt(document.getElementById('quantity').value) || 1;
+    const totalPrice = currentProduct.price * quantity;
+    document.getElementById('totalPrice').textContent = `Total: K${totalPrice.toFixed(2)}`;
+}
+
+function goToCheckout() {
+    const quantity = document.getElementById('quantity').value;
+    window.location.href = `checkout.html?productId=${currentProduct.id}&quantity=${quantity}`;
+}
+
 
         function placeOrder() {
             if (window.AndroidInterface && window.AndroidInterface.placeOrder) {

@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment - Farm Fresh Zambia</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F1F2F6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            width: 100%;
+            box-sizing: border-box;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .main-content {
+            margin-top: 80px;
+            padding: 24px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .payment-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .section {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+        }
+
+        .payment-summary {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .total-amount {
+            font-size: 24px;
+            font-weight: 600;
+            color: #45A29E;
+            border-top: 2px solid #dee2e6;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+
+        .payment-steps {
+            margin-bottom: 24px;
+        }
+
+        .step {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: #45A29E;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .mobile-number {
+            font-size: 24px;
+            font-weight: 600;
+            color: #45A29E;
+            text-align: center;
+            margin: 24px 0;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        .input-group input:focus {
+            border-color: #45A29E;
+            outline: none;
+        }
+
+        .verify-button {
+            background: #45A29E;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 16px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .verify-button:hover {
+            background: #3d8f8a;
+        }
+
+        .verification-status {
+            text-align: center;
+            margin-top: 24px;
+            padding: 16px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .verification-status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .verification-status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .timer {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #45A29E;
+        }
+
+        .back-button {
+            color: #45A29E;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            display: none;
+        }
+
+        .notification.success {
+            background: #45A29E;
+        }
+
+        .notification.error {
+            background: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="javascript:history.back()" class="back-button">← Back to Checkout</a>
+        <div class="timestamp" id="timestamp"></div>
+    </nav>
+
+    <div class="main-content">
+        <div class="payment-container">
+            <div class="section">
+                <h2 class="section-title">Payment Details</h2>
+                <div class="payment-summary">
+                    <div class="summary-row">
+                        <div>Order Amount</div>
+                        <div id="orderAmount">K0.00</div>
+                    </div>
+                    <div class="summary-row">
+                        <div>Delivery Fee</div>
+                        <div id="deliveryFee">K0.00</div>
+                    </div>
+                    <div class="summary-row total-amount">
+                        <div>Total Amount</div>
+                        <div id="totalAmount">K0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mobileMoneySection" style="display: none;">
+                <div class="section">
+                    <h2 class="section-title">Mobile Money Payment</h2>
+                    <div class="payment-steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-title">Dial USSD Code</div>
+                                <div class="step-description">
+                                    For MTN: Dial *305#<br>
+                                    For Airtel: Dial *211#
+                                </div>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-title">Send Payment</div>
+                                <div class="step-description">
+                                    Select "Send Money" and enter our number:
+                                    <div class="mobile-number" id="merchantNumber">0977123456</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-title">Enter Reference Number</div>
+                                <div class="input-group">
+                                    <label for="reference">Transaction Reference</label>
+                                    <input type="text" id="reference" placeholder="Enter the reference number from your mobile money message">
+                                </div>
+                                <button onclick="verifyPayment()" class="verify-button">Verify Payment</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="verification-status" id="verificationStatus">
+                    Verifying payment...
+                </div>
+
+                <div class="timer" id="timer" style="display: none;">
+                    Time remaining: <span id="timeLeft">10:00</span>
+                </div>
+            </div>
+
+            <div id="cashSection" style="display: none;">
+                <div class="section">
+                    <h2 class="section-title">Cash on Delivery</h2>
+                    <div class="payment-steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-title">Confirmation</div>
+                                <div class="step-description">
+                                    Please have the exact amount ready when your order arrives.
+                                    You will pay: <strong id="cashAmount">K0.00</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-title">Next Steps</div>
+                                <div class="step-description">
+                                    1. Your order will be prepared<br>
+                                    2. Our delivery partner will contact you<br>
+                                    3. Pay in cash upon delivery
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="confirmCashOrder()" class="verify-button">Confirm Order</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script>
+        let orderId = null;
+        let paymentMethod = null;
+        let timerInterval = null;
+
+        function updateTimestamp() {
+            document.getElementById('timestamp').textContent = 
+                new Date().toISOString().replace('T', ' ').substring(0, 19);
+        }
+
+        function showNotification(message, type) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        function startPaymentTimer() {
+            let timeLeft = 10 * 60; // 10 minutes
+            const timerElement = document.getElementById('timer');
+            const timeLeftElement = document.getElementById('timeLeft');
+            
+            timerElement.style.display = 'block';
+            
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                timeLeftElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    showNotification('Payment time expired. Please try again.', 'error');
+                    setTimeout(() => {
+                        window.location.href = 'orders.html';
+                    }, 3000);
+                }
+            }, 1000);
+        }
+
+        function verifyPayment() {
+            const reference = document.getElementById('reference').value.trim();
+            
+            if (!reference) {
+                showNotification('Please enter the reference number', 'error');
+                return;
+            }
+            
+            if (window.AndroidInterface && window.AndroidInterface.verifyPayment) {
+                window.AndroidInterface.verifyPayment(orderId, reference);
+            }
+        }
+
+        function confirmCashOrder() {
+            if (window.AndroidInterface && window.AndroidInterface.confirmCashOrder) {
+                window.AndroidInterface.confirmCashOrder(orderId);
+            }
+        }
+
+        function handlePaymentSuccess() {
+            clearInterval(timerInterval);
+            showNotification('Payment verified successfully!', 'success');
+            setTimeout(() => {
+                window.location.href = 'orders.html';
+            }, 2000);
+        }
+
+        function handlePaymentError(message) {
+            showNotification(message || 'Payment verification failed', 'error');
+        }
+
+        function loadPaymentDetails() {
+            const urlParams = new URLSearchParams(window.location.search);
+            orderId = urlParams.get('orderId');
+            paymentMethod = urlParams.get('method');
+            
+            if (!orderId || !paymentMethod) {
+                showNotification('Invalid payment details', 'error');
+                setTimeout(() => {
+                    window.location.href = 'orders.html';
+                }, 2000);
+                return;
+            }
+
+            // Show relevant payment section
+            document.getElementById('mobileMoneySection').style.display = 
+                paymentMethod === 'mobile' ? 'block' : 'none';
+            document.getElementById('cashSection').style.display = 
+                paymentMethod === 'cash' ? 'block' : 'none';
+
+            if (window.AndroidInterface && window.AndroidInterface.getOrderDetails) {
+                window.AndroidInterface.getOrderDetails(orderId);
+            }
+
+            if (paymentMethod === 'mobile') {
+                startPaymentTimer();
+            }
+        }
+
+        function updateOrderDetails(details) {
+            document.getElementById('orderAmount').textContent = `K${details.orderAmount.toFixed(2)}`;
+            document.getElementById('deliveryFee').textContent = `K${details.deliveryFee.toFixed(2)}`;
+            document.getElementById('totalAmount').textContent = `K${details.totalAmount.toFixed(2)}`;
+            document.getElementById('cashAmount').textContent = `K${details.totalAmount.toFixed(2)}`;
+            // Update merchant number if provided
+            if (details.merchantNumber) {
+                document.getElementById('merchantNumber').textContent = details.merchantNumber;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTimestamp();
+            setInterval(updateTimestamp, 1000);
+            loadPaymentDetails();
+        });
+    </script>
+</body>
+</html>

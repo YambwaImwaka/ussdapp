@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout - Farm Fresh Zambia</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F1F2F6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            width: 100%;
+            box-sizing: border-box;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .main-content {
+            margin-top: 80px;
+            padding: 24px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .checkout-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .section {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+        }
+
+        .order-summary {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .total {
+            font-size: 20px;
+            font-weight: 600;
+            color: #45A29E;
+            border-top: 2px solid #dee2e6;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+
+        .delivery-options {
+            display: grid;
+            gap: 12px;
+        }
+
+        .delivery-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .delivery-option:hover {
+            border-color: #45A29E;
+        }
+
+        .delivery-option.selected {
+            border-color: #45A29E;
+            background: #f8f9fa;
+        }
+
+        .payment-methods {
+            display: grid;
+            gap: 12px;
+        }
+
+        .payment-method {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .payment-method:hover {
+            border-color: #45A29E;
+        }
+
+        .payment-method.selected {
+            border-color: #45A29E;
+            background: #f8f9fa;
+        }
+
+        .confirm-button {
+            background: #45A29E;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 16px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 24px;
+        }
+
+        .confirm-button:hover {
+            background: #3d8f8a;
+        }
+
+        .back-button {
+            color: #45A29E;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        .input-group input:focus {
+            border-color: #45A29E;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="javascript:history.back()" class="back-button">← Back to Product</a>
+        <div class="timestamp" id="timestamp"></div>
+    </nav>
+
+    <div class="main-content">
+        <div class="checkout-container">
+            <div class="section">
+                <h2 class="section-title">Order Summary</h2>
+                <div class="order-summary" id="orderSummary">
+                    <!-- Order summary will be loaded here -->
+                </div>
+            </div>
+
+            <div class="section">
+                <h2 class="section-title">Delivery Information</h2>
+                <div class="input-group">
+                    <label for="address">Delivery Address</label>
+                    <input type="text" id="address" placeholder="Enter your delivery address">
+                </div>
+                <div class="input-group">
+                    <label for="phone">Phone Number</label>
+                    <input type="tel" id="phone" placeholder="Enter your phone number">
+                </div>
+                <div class="delivery-options">
+                    <div class="delivery-option" onclick="selectDelivery('standard')" id="standard-delivery">
+                        <input type="radio" name="delivery" value="standard">
+                        <div>
+                            <strong>Standard Delivery</strong>
+                            <div>Delivery within 2-3 days</div>
+                            <div>K50.00</div>
+                        </div>
+                    </div>
+                    <div class="delivery-option" onclick="selectDelivery('express')" id="express-delivery">
+                        <input type="radio" name="delivery" value="express">
+                        <div>
+                            <strong>Express Delivery</strong>
+                            <div>Same day delivery</div>
+                            <div>K100.00</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2 class="section-title">Payment Method</h2>
+                <div class="payment-methods">
+                    <div class="payment-method" onclick="selectPayment('mobile')" id="mobile-money">
+                        <input type="radio" name="payment" value="mobile">
+                        <div>
+                            <strong>Mobile Money</strong>
+                            <div>Pay with MTN or Airtel Money</div>
+                        </div>
+                    </div>
+                    <div class="payment-method" onclick="selectPayment('cash')" id="cash-delivery">
+                        <input type="radio" name="payment" value="cash">
+                        <div>
+                            <strong>Cash on Delivery</strong>
+                            <div>Pay when you receive your order</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="confirmOrder()" class="confirm-button">Confirm Order</button>
+        </div>
+    </div>
+
+    <script>
+        let currentProduct = null;
+        let currentUser = null;
+        let quantity = 1;
+        let selectedDelivery = null;
+        let selectedPayment = null;
+
+        function updateTimestamp() {
+            document.getElementById('timestamp').textContent = 
+                new Date().toISOString().replace('T', ' ').substring(0, 19);
+        }
+
+        function loadCheckoutDetails() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const productId = urlParams.get('productId');
+            quantity = parseInt(urlParams.get('quantity')) || 1;
+            
+            if (!productId) {
+                showError('Invalid product ID');
+                return;
+            }
+
+            if (window.AndroidInterface && window.AndroidInterface.getProductDetails) {
+                window.AndroidInterface.getProductDetails(productId);
+            }
+        }
+
+        function renderCheckoutSummary(product) {
+            currentProduct = product;
+            const container = document.getElementById('orderSummary');
+            const subtotal = product.price * quantity;
+            
+            container.innerHTML = `
+                <div class="summary-item">
+                    <div>${product.name} x ${quantity}</div>
+                    <div>K${subtotal.toFixed(2)}</div>
+                </div>
+                <div class="summary-item">
+                    <div>Delivery Fee</div>
+                    <div id="deliveryFee">K0.00</div>
+                </div>
+                <div class="summary-item total">
+                    <div>Total</div>
+                    <div id="totalAmount">K${subtotal.toFixed(2)}</div>
+                </div>
+            `;
+        }
+
+        function selectDelivery(type) {
+            selectedDelivery = type;
+            document.querySelectorAll('.delivery-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            document.getElementById(`${type}-delivery`).classList.add('selected');
+            
+            const deliveryFee = type === 'express' ? 100 : 50;
+            document.getElementById('deliveryFee').textContent = `K${deliveryFee.toFixed(2)}`;
+            
+            updateTotal();
+        }
+
+        function selectPayment(type) {
+            selectedPayment = type;
+            document.querySelectorAll('.payment-method').forEach(method => {
+                method.classList.remove('selected');
+            });
+            document.getElementById(`${type}-${type === 'mobile' ? 'money' : 'delivery'}`).classList.add('selected');
+        }
+
+        function updateTotal() {
+            if (!currentProduct) return;
+            
+            const subtotal = currentProduct.price * quantity;
+            const deliveryFee = selectedDelivery === 'express' ? 100 : (selectedDelivery === 'standard' ? 50 : 0);
+            const total = subtotal + deliveryFee;
+            
+            document.getElementById('totalAmount').textContent = `K${total.toFixed(2)}`;
+        }
+
+        function confirmOrder() {
+            const address = document.getElementById('address').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            
+            if (!address) {
+                showError('Please enter delivery address');
+                return;
+            }
+            if (!phone) {
+                showError('Please enter phone number');
+                return;
+            }
+            if (!selectedDelivery) {
+                showError('Please select delivery method');
+                return;
+            }
+            if (!selectedPayment) {
+                showError('Please select payment method');
+                return;
+            }
+
+            const orderDetails = {
+                productId: currentProduct.id,
+                quantity: quantity,
+                deliveryAddress: address,
+                phoneNumber: phone,
+                deliveryMethod: selectedDelivery,
+                paymentMethod: selectedPayment,
+                deliveryFee: selectedDelivery === 'express' ? 100 : 50
+            };

@@ -958,38 +958,77 @@ fun initializeChat(otherUserId: String) {
     val chatParticipants = listOf(user.uid, otherUserId).sorted()
     val chatId = "chat_${chatParticipants[0]}_${chatParticipants[1]}"
 
-    // Set up real-time listener for messages
+    // First ensure chat document exists with proper permissions
     firestore.collection("chats").document(chatId)
-        .collection("messages")
-        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
-        .addSnapshotListener { snapshots, e ->
-            if (e != null) {
-                Log.e("Chat", "Listen failed", e)
-                return@addSnapshotListener
+        .get()
+        .addOnSuccessListener { document ->
+            if (!document.exists()) {
+                // Create new chat document
+                val chatData = hashMapOf(
+                    "participants" to mapOf(
+                        user.uid to true,
+                        otherUserId to true
+                    ),
+                    "createdAt" to Date(),
+                    "lastMessage" to null
+                )
+                
+                firestore.collection("chats").document(chatId)
+                    .set(chatData)
+                    .addOnFailureListener { e ->
+                        Log.e("Chat", "Failed to create chat document", e)
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "showError('Failed to initialize chat')",
+                                null
+                            )
+                        }
+                        return@addOnFailureListener
+                    }
             }
 
-            snapshots?.documentChanges?.forEach { dc ->
-                if (dc.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                    val messageData = dc.document.data
-                    messageData["isSent"] = messageData["senderId"] == user.uid
-                    
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            "renderMessage(${Gson().toJson(messageData)})",
-                            null
-                        )
+            // Set up real-time listener for messages
+            firestore.collection("chats").document(chatId)
+                .collection("messages")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
+                .addSnapshotListener { snapshots, e ->
+                    if (e != null) {
+                        Log.e("Chat", "Listen failed", e)
+                        return@addSnapshotListener
+                    }
+
+                    snapshots?.documentChanges?.forEach { dc ->
+                        if (dc.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                            val messageData = dc.document.data
+                            messageData["isSent"] = messageData["senderId"] == user.uid
+                            
+                            runOnUiThread {
+                                webView?.evaluateJavascript(
+                                    "renderMessage(${Gson().toJson(messageData)})",
+                                    null
+                                )
+                            }
+                        }
                     }
                 }
+
+            // Store chat ID in memory for sending messages
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "chatId = '$chatId'",
+                    null
+                )
             }
         }
-
-    // Store chat ID in memory for sending messages
-    runOnUiThread {
-        webView?.evaluateJavascript(
-            "chatId = '$chatId'",
-            null
-        )
-    }
+        .addOnFailureListener { e ->
+            Log.e("Chat", "Failed to check chat document", e)
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Failed to initialize chat')",
+                    null
+                )
+            }
+        }
 }
 
 @JavascriptInterface
