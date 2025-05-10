@@ -33,7 +33,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var storage: FirebaseStorage
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var imageSelectedCallback: ValueCallback<Uri>? = null
-    private var pendingImageSelection = false
 
     private val requiredPermissions = mutableListOf(
         Manifest.permission.RECEIVE_SMS,
@@ -83,6 +82,8 @@ class MainActivity : ComponentActivity() {
             clearImageCallbacks()
         }
     }
+
+    private var pendingImageSelection = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -165,6 +166,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun startImageSelection() {
+        if (checkStoragePermission()) {
+            openImagePicker()
+        } else {
+            pendingImageSelection = true
+            requestStoragePermission()
+        }
+    }
+
     private fun checkStoragePermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(
@@ -186,15 +196,6 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
         requestPermissionLauncher.launch(arrayOf(permission))
-    }
-
-    private fun startImageSelection() {
-        if (checkStoragePermission()) {
-            openImagePicker()
-        } else {
-            pendingImageSelection = true
-            requestStoragePermission()
-        }
     }
 
     private fun openImagePicker() {
@@ -223,7 +224,7 @@ class MainActivity : ComponentActivity() {
             Log.e("Image", "Error processing image: ${e.message}", e)
             runOnUiThread {
                 webView?.evaluateJavascript(
-                    "showError('Error processing image: ${e.message?.replace("'", "\\'")}')",
+                    "showError('Error processing image: ${e.message?.replace("'", "")}')",
                     null
                 )
             }
@@ -247,8 +248,6 @@ class MainActivity : ComponentActivity() {
                 .addOnSuccessListener { document ->
                     val userData = document.data?.toMutableMap() ?: mutableMapOf()
                     userData["uid"] = user.uid
-                    userData["email"] = user.email
-                    userData["displayName"] = user.displayName
                     
                     runOnUiThread {
                         webView?.evaluateJavascript(
@@ -260,19 +259,20 @@ class MainActivity : ComponentActivity() {
                 .addOnFailureListener { e ->
                     Log.e("Auth", "Failed to get user data: ${e.message}", e)
                     runOnUiThread {
-                        webView?.evaluateJavascript(
-                            "showError('Failed to get user data')",
-                            null
-                        )
+                        webView?.loadUrl("file:///android_asset/login.html")
                     }
                 }
+        } else {
+            runOnUiThread {
+                webView?.loadUrl("file:///android_asset/login.html")
+            }
         }
     }
 
     inner class WebAppInterface {
         @JavascriptInterface
-        fun login(email: String, password: String) {
-            Log.d("Auth", "Attempting login with email: $email")
+        fun loginUser(email: String, password: String) {
+            Log.d("Auth", "Attempting to login with email: $email")
             auth.signInWithEmailAndPassword(email, password)
                 .addOnSuccessListener {
                     Log.d("Auth", "Login successful")
@@ -284,7 +284,7 @@ class MainActivity : ComponentActivity() {
                     Log.e("Auth", "Login failed: ${e.message}", e)
                     runOnUiThread {
                         webView?.evaluateJavascript(
-                            "showError('${e.message?.replace("'", "\\'")}')",
+                            "showError('${e.message?.replace("'", "")}')",
                             null
                         )
                     }
@@ -317,7 +317,7 @@ class MainActivity : ComponentActivity() {
                             Log.e("Auth", "Failed to save user data: ${e.message}", e)
                             runOnUiThread {
                                 webView?.evaluateJavascript(
-                                    "showError('Failed to save user data: ${e.message?.replace("'", "\\'")}')",
+                                    "showError('Failed to save user data: ${e.message?.replace("'", "")}')",
                                     null
                                 )
                             }
@@ -327,11 +327,43 @@ class MainActivity : ComponentActivity() {
                     Log.e("Auth", "Registration failed: ${e.message}", e)
                     runOnUiThread {
                         webView?.evaluateJavascript(
-                            "showError('${e.message?.replace("'", "\\'")}')",
+                            "showError('${e.message?.replace("'", "")}')",
                             null
                         )
                     }
                 }
+        }
+
+        @JavascriptInterface
+        fun getCurrentUser(): String {
+            val user = auth.currentUser
+            return if (user != null) {
+                firestore.collection("users").document(user.uid)
+                    .get()
+                    .addOnSuccessListener { document ->
+                        val userData = document.data?.toMutableMap() ?: mutableMapOf()
+                        userData["uid"] = user.uid
+                        
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "updateUserInterface(${Gson().toJson(userData)})",
+                                null
+                            )
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Auth", "Failed to get user data: ${e.message}", e)
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "showError('Failed to get user data')",
+                                null
+                            )
+                        }
+                    }
+                "{}"
+            } else {
+                "{}"
+            }
         }
 
         @JavascriptInterface
@@ -371,19 +403,6 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
-        fun startImageSelection() {
-            Log.d("ImageSelection", "Starting image selection")
-            runOnUiThread {
-                if (checkStoragePermission()) {
-                    openImagePicker()
-                } else {
-                    pendingImageSelection = true
-                    requestStoragePermission()
-                }
-            }
-        }
-
-        @JavascriptInterface
         fun addProduct(productData: String) {
             try {
                 Log.d("ProductCreation", "Received product data: ${productData.take(200)}...")
@@ -391,57 +410,32 @@ class MainActivity : ComponentActivity() {
                 val data = JSONObject(productData)
                 val user = auth.currentUser
                 
-                if (user == null) {
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            "showError('User not authenticated')",
-                            null
-                        )
-                    }
-                    return
-                }
-
-                if (!data.has("image") || !data.getString("image").startsWith("data:image/")) {
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            "showError('Invalid image format')",
-                            null
-                        )
-                    }
-                    return
-                }
+                if (user == null) throw Exception("User not authenticated")
+                if (!data.has("image")) throw Exception("Missing image data")
+                if (!data.has("name") || data.getString("name").isBlank()) throw Exception("Invalid product name")
+                if (!data.has("price") || data.getDouble("price") <= 0) throw Exception("Invalid price")
+                if (!data.has("description") || data.getString("description").isBlank()) throw Exception("Invalid description")
 
                 val imageParts = data.getString("image").split(",")
-                val imageData = imageParts[1].trim()
+                if (imageParts.size < 2) throw Exception("Invalid image format")
+                val imageData = imageParts.last().trim()
 
-                Log.d("ProductCreation", "Processing image data")
+                Log.d("ProductCreation", "Decoding image data (length: ${imageData.length})")
 
                 val imageBytes = try {
-                    android.util.Base64.decode(imageData, android.util.Base64.DEFAULT)
+                    android.util.Base64.decode(imageData, android.util.Base64.NO_WRAP)
                 } catch (e: Exception) {
-                    Log.e("ProductCreation", "Failed to decode image: ${e.message}", e)
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            "showError('Invalid image format')",
-                            null
-                        )
-                    }
-                    return
+                    throw Exception("Invalid image encoding: ${e.message}")
                 }
 
-                val storageRef = storage.reference
+                val storageRef = FirebaseStorage.getInstance().reference
                 val imageRef = storageRef.child("product_images/${UUID.randomUUID()}.jpg")
 
                 val uploadTask = imageRef.putBytes(imageBytes)
                 
                 uploadTask.addOnProgressListener { taskSnapshot ->
                     val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            "updateUploadProgress($progress)",
-                            null
-                        )
-                    }
+                    webView?.evaluateJavascript("updateUploadProgress($progress)", null)
                 }
 
                 uploadTask.addOnSuccessListener { taskSnapshot ->
@@ -457,43 +451,52 @@ class MainActivity : ComponentActivity() {
                             "status" to "active"
                         )
 
-                        firestore.collection("products")
+                        FirebaseFirestore.getInstance().collection("products")
                             .add(product)
                             .addOnSuccessListener {
                                 Log.d("ProductCreation", "Product created successfully")
                                 runOnUiThread {
-                                    webView?.evaluateJavascript(
-                                        "hideLoading()",
-                                        null
-                                    )
+                                    webView?.evaluateJavascript("hideLoading()", null)
                                     webView?.loadUrl("file:///android_asset/home.html")
                                 }
                             }
                             .addOnFailureListener { e ->
-                                Log.e("ProductCreation", "Failed to create product: ${e.message}", e)
-                                runOnUiThread {
-                                    webView?.evaluateJavascript(
-                                        "showError('Failed to save product: ${e.message?.replace("'", "\\'")}')",
-                                        null
-                                    )
-                                }
+                                handleError("Firestore save failed: ${e.message}", e)
                             }
                     }
                 }.addOnFailureListener { e ->
-                    Log.e("ProductCreation", "Image upload failed: ${e.message}", e)
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            "showError('Image upload failed: ${e.message?.replace("'", "\\'")}')",
-                            null
-                        )
-                    }
+                    handleError("Image upload failed: ${e.message}", e)
                 }
 
             } catch (e: Exception) {
-                Log.e("ProductCreation", "Error creating product: ${e.message}", e)
+                handleError("Product creation error: ${e.message}", e)
+            }
+        }
+
+        private fun handleError(message: String, e: Exception) {
+            val sanitizedMessage = message.replace("'", "")
+            Log.e("ProductCreation", "$sanitizedMessage\n${e.stackTraceToString()}")
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('$sanitizedMessage'); hideLoading();",
+                    null
+                )
+            }
+        }
+
+        @JavascriptInterface
+        fun logout() {
+            try {
+                auth.signOut()
+                Log.d("Auth", "User logged out successfully")
+                runOnUiThread {
+                    webView?.loadUrl("file:///android_asset/login.html")
+                }
+            } catch (e: Exception) {
+                Log.e("Auth", "Error during logout: ${e.message}", e)
                 runOnUiThread {
                     webView?.evaluateJavascript(
-                        "showError('Error creating product: ${e.message?.replace("'", "\\'")}')",
+                        "showError('Failed to logout: ${e.message?.replace("'", "")}')",
                         null
                     )
                 }
@@ -501,8 +504,8 @@ class MainActivity : ComponentActivity() {
         }
         
         
-              
-        @JavascriptInterface
+        
+            @JavascriptInterface
         fun getProductDetails(productId: String) {
     Log.d("ProductDetails", "Fetching product: $productId")
     firestore.collection("products").document(productId)
@@ -537,23 +540,15 @@ class MainActivity : ComponentActivity() {
         }
 }
         
-        
 
         @JavascriptInterface
-        fun logout() {
-            try {
-                auth.signOut()
-                Log.d("Auth", "User logged out successfully")
-                runOnUiThread {
-                    webView?.loadUrl("file:///android_asset/login.html")
-                }
-            } catch (e: Exception) {
-                Log.e("Auth", "Error during logout: ${e.message}", e)
-                runOnUiThread {
-                    webView?.evaluateJavascript(
-                        "showError('Failed to logout: ${e.message?.replace("'", "\\'")}')",
-                        null
-                    )
+        fun startImageSelection() {
+            runOnUiThread {
+                if (checkStoragePermission()) {
+                    openImagePicker()
+                } else {
+                    pendingImageSelection = true
+                    requestStoragePermission()
                 }
             }
         }
