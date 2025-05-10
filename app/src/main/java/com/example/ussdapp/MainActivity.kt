@@ -411,6 +411,12 @@ class MainActivity : ComponentActivity() {
                 val user = auth.currentUser
                 
                 if (user == null) throw Exception("User not authenticated")
+                if (user.displayName.isNullOrBlank()) {
+            // Update the user's display name if it's missing
+            val userDoc = firestore.collection("users").document(user.uid).get().await()
+            val displayName = userDoc.getString("displayName") ?: throw Exception("User profile incomplete")
+            user.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(displayName).build()).await()
+        }
                 if (!data.has("image")) throw Exception("Missing image data")
                 if (!data.has("name") || data.getString("name").isBlank()) throw Exception("Invalid product name")
                 if (!data.has("price") || data.getDouble("price") <= 0) throw Exception("Invalid price")
@@ -441,15 +447,15 @@ class MainActivity : ComponentActivity() {
                 uploadTask.addOnSuccessListener { taskSnapshot ->
                     imageRef.downloadUrl.addOnSuccessListener { uri ->
                         val product = hashMapOf(
-                            "name" to data.getString("name"),
-                            "price" to data.getDouble("price"),
-                            "description" to data.getString("description"),
-                            "imageUrl" to uri.toString(),
-                            "farmerId" to user.uid,
-                            "farmerName" to (user.displayName ?: "Unknown Farmer"),
-                            "createdAt" to Date(),
-                            "status" to "active"
-                        )
+            "name" to data.getString("name"),
+            "price" to data.getDouble("price"),
+            "description" to data.getString("description"),
+            "imageUrl" to uri.toString(),
+            "farmerId" to user.uid,
+            "farmerName" to (user.displayName ?: throw Exception("User display name not set")),
+            "createdAt" to Date(),
+            "status" to "active"
+        )
 
                         FirebaseFirestore.getInstance().collection("products")
                             .add(product)
@@ -502,6 +508,44 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        
+        
+ @JavascriptInterface
+  fun getProductDetails(productId: String) {
+    Log.d("Products", "Fetching product details for ID: $productId")
+    
+    firestore.collection("products").document(productId)
+        .get()
+        .addOnSuccessListener { document ->
+            if (document.exists()) {
+                val productData = document.data
+                productData?.set("id", document.id)
+                
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "renderProduct(${Gson().toJson(productData)})",
+                        null
+                    )
+                }
+            } else {
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Product not found')",
+                        null
+                    )
+                }
+            }
+        }
+        .addOnFailureListener { e ->
+            Log.e("Products", "Failed to fetch product details: ${e.message}", e)
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Failed to load product details')",
+                    null
+                )
+            }
+        }
+}
 
         @JavascriptInterface
         fun startImageSelection() {
