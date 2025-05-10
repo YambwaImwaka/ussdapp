@@ -539,7 +539,351 @@ class MainActivity : ComponentActivity() {
             }
         }
 }
-        
+
+
+
+      @JavascriptInterface
+fun getOrders() {
+    val user = auth.currentUser
+    if (user == null) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('User not authenticated')",
+                null
+            )
+        }
+        return
+    }
+
+    // Query orders based on user type
+    firestore.collection("users").document(user.uid).get()
+        .addOnSuccessListener { userDoc ->
+            val userType = userDoc.getString("userType")
+            
+            val ordersQuery = when (userType) {
+                "farmer" -> firestore.collection("orders")
+                    .whereEqualTo("farmerId", user.uid)
+                "consumer" -> firestore.collection("orders")
+                    .whereEqualTo("userId", user.uid)
+                else -> null
+            }
+
+            ordersQuery?.get()
+                ?.addOnSuccessListener { documents ->
+                    val orders = documents.map { doc ->
+                        val data = doc.data.toMutableMap()
+                        data["orderId"] = doc.id
+                        data
+                    }
+                    
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "renderOrders(${Gson().toJson(orders)})",
+                            null
+                        )
+                    }
+                }
+                ?.addOnFailureListener { e ->
+                    Log.e("Orders", "Failed to fetch orders: ${e.message}")
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "showError('Failed to fetch orders: ${e.message?.replace("'", "\\'")}')",
+                            null
+                        )
+                    }
+                }
+        }
+        .addOnFailureListener { e ->
+            Log.e("Orders", "Failed to fetch user type: ${e.message}")
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Failed to fetch user data: ${e.message?.replace("'", "\\'")}')",
+                    null
+                )
+            }
+        }
+}
+
+@JavascriptInterface
+fun updateOrderStatus(orderId: String, status: String) {
+    val user = auth.currentUser
+    if (user == null) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('User not authenticated')",
+                null
+            )
+        }
+        return
+    }
+
+    firestore.collection("orders").document(orderId)
+        .get()
+        .addOnSuccessListener { document ->
+            // Verify the user has permission to update this order
+            val order = document.data
+            if (order == null) {
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Order not found')",
+                        null
+                    )
+                }
+                return@addOnSuccessListener
+            }
+
+            if (order["farmerId"] != user.uid) {
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Not authorized to update this order')",
+                        null
+                    )
+                }
+                return@addOnSuccessListener
+            }
+
+            // Update the order status
+            firestore.collection("orders").document(orderId)
+                .update(
+                    mapOf(
+                        "status" to status,
+                        "updatedAt" to Date(),
+                        "updatedBy" to user.uid
+                    )
+                )
+                .addOnSuccessListener {
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "loadOrders()", // Refresh the orders list
+                            null
+                        )
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Orders", "Failed to update order: ${e.message}")
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "showError('Failed to update order: ${e.message?.replace("'", "\\'")}')",
+                            null
+                        )
+                    }
+                }
+        }
+        .addOnFailureListener { e ->
+            Log.e("Orders", "Failed to fetch order: ${e.message}")
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Failed to fetch order: ${e.message?.replace("'", "\\'")}')",
+                    null
+                )
+            }
+        }
+}
+
+@JavascriptInterface
+fun placeOrder(productId: String) {
+    val user = auth.currentUser
+    if (user == null) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('User not authenticated')",
+                null
+            )
+        }
+        return
+    }
+
+    // First get the product details
+    firestore.collection("products").document(productId)
+        .get()
+        .addOnSuccessListener { document ->
+            val product = document.data
+            if (product == null) {
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Product not found')",
+                        null
+                    )
+                }
+                return@addOnSuccessListener
+            }
+
+            // Create new order
+            val order = hashMapOf(
+                "productId" to productId,
+                "productName" to product["name"],
+                "price" to product["price"],
+                "userId" to user.uid,
+                "userName" to (user.displayName ?: "Unknown User"),
+                "farmerId" to product["farmerId"],
+                "farmerName" to product["farmerName"],
+                "status" to "PENDING",
+                "createdAt" to Date()
+            )
+
+            firestore.collection("orders")
+                .add(order)
+                .addOnSuccessListener { docRef ->
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            """
+                            showSuccess('Order placed successfully');
+                            setTimeout(() => { window.location.href = 'orders.html'; }, 1500);
+                            """.trimIndent(),
+                            null
+                        )
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Orders", "Failed to create order: ${e.message}")
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "showError('Failed to place order: ${e.message?.replace("'", "\\'")}')",
+                            null
+                        )
+                    }
+                }
+        }
+        .addOnFailureListener { e ->
+            Log.e("Orders", "Failed to fetch product: ${e.message}")
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Failed to fetch product: ${e.message?.replace("'", "\\'")}')",
+                    null
+                )
+            }
+        }
+}
+
+@JavascriptInterface
+fun updateProfile(profileData: String) {
+    try {
+        val user = auth.currentUser
+        if (user == null) {
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('User not authenticated')",
+                    null
+                )
+            }
+            return
+        }
+
+        val data = JSONObject(profileData)
+        val updates = hashMapOf<String, Any>(
+            "displayName" to (data.getString("displayName")),
+            "updatedAt" to Date()
+        )
+
+        // Update the profile
+        firestore.collection("users").document(user.uid)
+            .update(updates)
+            .addOnSuccessListener {
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showSuccess('Profile updated successfully')",
+                        null
+                    )
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Profile", "Failed to update profile: ${e.message}")
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Failed to update profile: ${e.message?.replace("'", "\\'")}')",
+                        null
+                    )
+                }
+            }
+
+    } catch (e: Exception) {
+        Log.e("Profile", "Error updating profile: ${e.message}")
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('Error updating profile: ${e.message?.replace("'", "\\'")}')",
+                null
+            )
+        }
+    }
+}
+
+@JavascriptInterface
+fun updateProfileImage(imageData: String) {
+    try {
+        val user = auth.currentUser
+        if (user == null) throw Exception("User not authenticated")
+
+        val imageParts = imageData.split(",")
+        if (imageParts.size < 2) throw Exception("Invalid image format")
+        val imageBytes = android.util.Base64.decode(imageParts[1], android.util.Base64.DEFAULT)
+
+        val storageRef = storage.reference
+        val imageRef = storageRef.child("profile_images/${user.uid}.jpg")
+
+        val uploadTask = imageRef.putBytes(imageBytes)
+        uploadTask.addOnProgressListener { taskSnapshot ->
+            val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "updateImageProgress($progress)",
+                    null
+                )
+            }
+        }
+
+        uploadTask.continueWithTask { task ->
+            if (!task.isSuccessful) {
+                throw task.exception ?: Exception("Unknown error")
+            }
+            imageRef.downloadUrl
+        }.addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val downloadUrl = task.result.toString()
+                
+                // Update user profile with new image URL
+                firestore.collection("users").document(user.uid)
+                    .update("profileImage", downloadUrl)
+                    .addOnSuccessListener {
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                """
+                                updateProfileImage('$downloadUrl');
+                                showSuccess('Profile image updated successfully');
+                                """.trimIndent(),
+                                null
+                            )
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Profile", "Failed to update profile image URL: ${e.message}")
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "showError('Failed to update profile image: ${e.message?.replace("'", "\\'")}')",
+                                null
+                            )
+                        }
+                    }
+            } else {
+                val exception = task.exception
+                Log.e("Profile", "Failed to get download URL: ${exception?.message}")
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Failed to upload image: ${exception?.message?.replace("'", "\\'")}')",
+                        null
+                    )
+                }
+            }
+        }
+    } catch (e: Exception) {
+        Log.e("Profile", "Error updating profile image: ${e.message}")
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('Error updating profile image: ${e.message?.replace("'", "\\'")}')",
+                null
+            )
+        }
+    }
+}
 
         @JavascriptInterface
         fun startImageSelection() {
