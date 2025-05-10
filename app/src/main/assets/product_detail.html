@@ -149,39 +149,46 @@
                 new Date().toISOString().replace('T', ' ').substring(0, 19);
         }
 
-        function loadProductDetails() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const productId = urlParams.get('id');
-            
-            if (window.AndroidInterface && window.AndroidInterface.getProductDetails) {
-                window.AndroidInterface.getProductDetails(productId);
-            }
-        }
+function loadProductDetails() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('id');
+    
+    if (!productId) {
+        showError('Invalid product ID');
+        return;
+    }
 
-        function renderProduct(product) {
-            currentProduct = product;
-            const container = document.getElementById('productDetails');
+    if (window.AndroidInterface && window.AndroidInterface.getProductDetails) {
+        window.AndroidInterface.getProductDetails(productId);
+    } else {
+        showError('System interface unavailable');
+    }
+}
+
+function renderProduct(product) {
+    currentProduct = product;
+    const container = document.getElementById('productDetails');
+    
+    container.innerHTML = `
+        <img src="${product.imageUrl}" class="product-image" alt="${product.name}">
+        <div class="product-info">
+            <h1 class="product-title">${product.name}</h1>
+            <div class="product-price">K${product.price.toFixed(2)}</div>
+            <p class="product-description">${product.description}</p>
             
-            container.innerHTML = `
-                <img src="${product.imageUrl}" class="product-image" alt="${product.name}">
-                <div class="product-info">
-                    <h1 class="product-title">${product.name}</h1>
-                    <div class="product-price">K${product.price}</div>
-                    <p class="product-description">${product.description}</p>
-                    
-                    <div class="farmer-info">
-                        <div>
-                            <strong>Seller:</strong> ${product.farmerName}
-                        </div>
-                    </div>
-                    
-                    ${currentUser?.userType === 'consumer' ? `
-                        <button onclick="placeOrder()" class="order-button">Place Order</button>
-                        <button onclick="startChat()" class="chat-button">Chat with Seller</button>
-                    ` : ''}
+            <div class="farmer-info">
+                <div>
+                    <strong>Seller:</strong> ${product.farmerName}
                 </div>
-            `;
-        }
+            </div>
+            
+            ${currentUser?.userType === 'consumer' ? `
+                <button onclick="placeOrder()" class="order-button">Place Order</button>
+                <button onclick="startChat()" class="chat-button">Chat with Seller</button>
+            ` : ''}
+        </div>
+    `;
+}
 
         function placeOrder() {
             if (window.AndroidInterface && window.AndroidInterface.placeOrder) {
@@ -209,6 +216,16 @@
             currentUser = userData;
             loadProductDetails(); // Reload to update UI based on user type
         }
+        
+        // Add this error handler at the bottom of the script
+    window.handleProductError = function(message) {
+    const container = document.getElementById('productDetails');
+    container.innerHTML = `
+        <div class="error-message" style="padding: 20px; text-align: center;">
+            ${message}
+        </div>
+    `;
+};
     </script>
 </body>
 </html>
