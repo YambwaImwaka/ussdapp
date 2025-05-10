@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Orders - Farm Fresh Zambia</title>
+  
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -154,6 +155,32 @@
             padding: 40px;
             color: #666;
         }
+        
+        .notification {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: 8px;
+    color: white;
+    font-weight: 500;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.notification.success {
+    background-color: #45A29E;
+}
+
+.notification.error {
+    background-color: #dc3545;
+}
+
+.notification.show {
+    opacity: 1;
+}
     </style>
 </head>
 <body>
@@ -164,6 +191,10 @@
             <span class="timestamp" id="timestamp">2025-05-08 11:36:55</span>
         </div>
     </nav>
+    
+    <div id="notification" class="notification" style="display: none;">
+    <span id="notificationMessage"></span>
+</div>
 
     <div class="main-content">
         <div class="orders-container" id="ordersContainer">
@@ -236,6 +267,47 @@
                 window.AndroidInterface.updateOrderStatus(orderId, status);
             }
         }
+        
+        
+        function showSuccess(message) {
+    const notification = document.getElementById('notification');
+    const notificationMessage = document.getElementById('notificationMessage');
+    
+    notification.className = 'notification success';
+    notificationMessage.textContent = message;
+    notification.style.display = 'block';
+    
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 100);
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 300);
+    }, 3000);
+}
+
+function showError(message) {
+    const notification = document.getElementById('notification');
+    const notificationMessage = document.getElementById('notificationMessage');
+    
+    notification.className = 'notification error';
+    notificationMessage.textContent = message;
+    notification.style.display = 'block';
+    
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 100);
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 300);
+    }, 3000);
+}
 
         function updateUserInterface(userData) {
             currentUser = userData;

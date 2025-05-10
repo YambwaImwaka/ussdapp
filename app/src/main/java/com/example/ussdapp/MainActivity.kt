@@ -610,7 +610,13 @@ fun updateOrderStatus(orderId: String, status: String) {
     if (user == null) {
         runOnUiThread {
             webView?.evaluateJavascript(
-                "showError('User not authenticated')",
+                """
+                if (typeof showError === 'function') {
+                    showError('User not authenticated');
+                } else {
+                    alert('User not authenticated');
+                }
+                """.trimIndent(),
                 null
             )
         }
@@ -620,12 +626,17 @@ fun updateOrderStatus(orderId: String, status: String) {
     firestore.collection("orders").document(orderId)
         .get()
         .addOnSuccessListener { document ->
-            // Verify the user has permission to update this order
             val order = document.data
             if (order == null) {
                 runOnUiThread {
                     webView?.evaluateJavascript(
-                        "showError('Order not found')",
+                        """
+                        if (typeof showError === 'function') {
+                            showError('Order not found');
+                        } else {
+                            alert('Order not found');
+                        }
+                        """.trimIndent(),
                         null
                     )
                 }
@@ -635,7 +646,13 @@ fun updateOrderStatus(orderId: String, status: String) {
             if (order["farmerId"] != user.uid) {
                 runOnUiThread {
                     webView?.evaluateJavascript(
-                        "showError('Not authorized to update this order')",
+                        """
+                        if (typeof showError === 'function') {
+                            showError('Not authorized to update this order');
+                        } else {
+                            alert('Not authorized to update this order');
+                        }
+                        """.trimIndent(),
                         null
                     )
                 }
@@ -654,7 +671,14 @@ fun updateOrderStatus(orderId: String, status: String) {
                 .addOnSuccessListener {
                     runOnUiThread {
                         webView?.evaluateJavascript(
-                            "loadOrders()", // Refresh the orders list
+                            """
+                            if (typeof showSuccess === 'function') {
+                                showSuccess('Order status updated successfully');
+                            } else {
+                                alert('Order status updated successfully');
+                            }
+                            loadOrders();
+                            """.trimIndent(),
                             null
                         )
                     }
@@ -663,7 +687,13 @@ fun updateOrderStatus(orderId: String, status: String) {
                     Log.e("Orders", "Failed to update order: ${e.message}")
                     runOnUiThread {
                         webView?.evaluateJavascript(
-                            "showError('Failed to update order: ${e.message?.replace("'", "\\'")}')",
+                            """
+                            if (typeof showError === 'function') {
+                                showError('Failed to update order: ${e.message?.replace("'", "\\'")}');
+                            } else {
+                                alert('Failed to update order: ${e.message?.replace("'", "\\'")}');
+                            }
+                            """.trimIndent(),
                             null
                         )
                     }
@@ -673,7 +703,13 @@ fun updateOrderStatus(orderId: String, status: String) {
             Log.e("Orders", "Failed to fetch order: ${e.message}")
             runOnUiThread {
                 webView?.evaluateJavascript(
-                    "showError('Failed to fetch order: ${e.message?.replace("'", "\\'")}')",
+                    """
+                    if (typeof showError === 'function') {
+                        showError('Failed to fetch order: ${e.message?.replace("'", "\\'")}');
+                    } else {
+                        alert('Failed to fetch order: ${e.message?.replace("'", "\\'")}');
+                    }
+                    """.trimIndent(),
                     null
                 )
             }
@@ -712,13 +748,15 @@ fun placeOrder(productId: String) {
             val order = hashMapOf(
                 "productId" to productId,
                 "productName" to product["name"],
+                "productImage" to product["imageUrl"], // Add product image URL
                 "price" to product["price"],
                 "userId" to user.uid,
                 "userName" to (user.displayName ?: "Unknown User"),
                 "farmerId" to product["farmerId"],
                 "farmerName" to product["farmerName"],
                 "status" to "PENDING",
-                "createdAt" to Date()
+                "createdAt" to Date(),
+                "updatedAt" to Date()
             )
 
             firestore.collection("orders")
@@ -727,8 +765,13 @@ fun placeOrder(productId: String) {
                     runOnUiThread {
                         webView?.evaluateJavascript(
                             """
-                            showSuccess('Order placed successfully');
-                            setTimeout(() => { window.location.href = 'orders.html'; }, 1500);
+                            if (typeof showSuccess === 'function') {
+                                showSuccess('Order placed successfully');
+                                setTimeout(() => { window.location.href = 'orders.html'; }, 1500);
+                            } else {
+                                alert('Order placed successfully');
+                                window.location.href = 'orders.html';
+                            }
                             """.trimIndent(),
                             null
                         )
@@ -738,7 +781,13 @@ fun placeOrder(productId: String) {
                     Log.e("Orders", "Failed to create order: ${e.message}")
                     runOnUiThread {
                         webView?.evaluateJavascript(
-                            "showError('Failed to place order: ${e.message?.replace("'", "\\'")}')",
+                            """
+                            if (typeof showError === 'function') {
+                                showError('Failed to place order: ${e.message?.replace("'", "\\'")}');
+                            } else {
+                                alert('Failed to place order: ${e.message?.replace("'", "\\'")}');
+                            }
+                            """.trimIndent(),
                             null
                         )
                     }
@@ -748,7 +797,13 @@ fun placeOrder(productId: String) {
             Log.e("Orders", "Failed to fetch product: ${e.message}")
             runOnUiThread {
                 webView?.evaluateJavascript(
-                    "showError('Failed to fetch product: ${e.message?.replace("'", "\\'")}')",
+                    """
+                    if (typeof showError === 'function') {
+                        showError('Failed to fetch product: ${e.message?.replace("'", "\\'")}');
+                    } else {
+                        alert('Failed to fetch product: ${e.message?.replace("'", "\\'")}');
+                    }
+                    """.trimIndent(),
                     null
                 )
             }
@@ -883,6 +938,92 @@ fun updateProfileImage(imageData: String) {
             )
         }
     }
+}
+
+
+@JavascriptInterface
+fun initializeChat(otherUserId: String) {
+    val user = auth.currentUser
+    if (user == null) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('User not authenticated')",
+                null
+            )
+        }
+        return
+    }
+
+    // Create or get chat ID (combine user IDs in alphabetical order)
+    val chatParticipants = listOf(user.uid, otherUserId).sorted()
+    val chatId = "chat_${chatParticipants[0]}_${chatParticipants[1]}"
+
+    // Set up real-time listener for messages
+    firestore.collection("chats").document(chatId)
+        .collection("messages")
+        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
+        .addSnapshotListener { snapshots, e ->
+            if (e != null) {
+                Log.e("Chat", "Listen failed", e)
+                return@addSnapshotListener
+            }
+
+            snapshots?.documentChanges?.forEach { dc ->
+                if (dc.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                    val messageData = dc.document.data
+                    messageData["isSent"] = messageData["senderId"] == user.uid
+                    
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "renderMessage(${Gson().toJson(messageData)})",
+                            null
+                        )
+                    }
+                }
+            }
+        }
+
+    // Store chat ID in memory for sending messages
+    runOnUiThread {
+        webView?.evaluateJavascript(
+            "chatId = '$chatId'",
+            null
+        )
+    }
+}
+
+@JavascriptInterface
+fun sendMessage(chatId: String, message: String) {
+    val user = auth.currentUser
+    if (user == null) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('User not authenticated')",
+                null
+            )
+        }
+        return
+    }
+
+    val messageData = hashMapOf(
+        "text" to message,
+        "senderId" to user.uid,
+        "senderName" to (user.displayName ?: "Unknown User"),
+        "timestamp" to Date()
+    )
+
+    firestore.collection("chats").document(chatId)
+        .collection("messages")
+        .add(messageData)
+        .addOnFailureListener { e ->
+            Log.e("Chat", "Error sending message", e)
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Failed to send message: ${e.message?.replace("'", "\\'")}')",
+                    null
+                )
+            }
+        }
 }
 
         @JavascriptInterface
