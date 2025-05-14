@@ -51,13 +51,11 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Check if user is already logged in
             if (window.AndroidInterface && window.AndroidInterface.getCurrentUser) {
                 window.AndroidInterface.getCurrentUser();
             }
         });
 
-        // This function will be called from MainActivity when user data is retrieved
         function updateUserInterface(userData) {
             if (userData && userData.uid) {
                 window.location.href = 'home.html';
@@ -66,7 +64,6 @@
             }
         }
 
-        // Fallback in case no response is received
         setTimeout(() => {
             window.location.href = 'login.html';
         }, 3000);

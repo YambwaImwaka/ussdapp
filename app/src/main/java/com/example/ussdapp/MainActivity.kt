@@ -505,8 +505,8 @@ class MainActivity : ComponentActivity() {
         
         
         
-            @JavascriptInterface
-        fun getProductDetails(productId: String) {
+  @JavascriptInterface
+fun getProductDetails(productId: String) {
     Log.d("ProductDetails", "Fetching product: $productId")
     firestore.collection("products").document(productId)
         .get()
@@ -516,7 +516,7 @@ class MainActivity : ComponentActivity() {
                 productData["id"] = document.id
                 runOnUiThread {
                     webView?.evaluateJavascript(
-                        "renderProduct(${Gson().toJson(productData)})", 
+                        "renderProductDetails(${Gson().toJson(productData)})", 
                         null
                     )
                 }
@@ -555,7 +555,6 @@ fun getOrders() {
         return
     }
 
-    // Query orders based on user type
     firestore.collection("users").document(user.uid).get()
         .addOnSuccessListener { userDoc ->
             val userType = userDoc.getString("userType")
@@ -659,7 +658,7 @@ fun updateOrderStatus(orderId: String, status: String) {
                 return@addOnSuccessListener
             }
 
-            // Update the order status
+          
             firestore.collection("orders").document(orderId)
                 .update(
                     mapOf(
@@ -729,7 +728,7 @@ fun placeOrder(productId: String) {
         return
     }
 
-    // First get the product details
+  
     firestore.collection("products").document(productId)
         .get()
         .addOnSuccessListener { document ->
@@ -744,11 +743,11 @@ fun placeOrder(productId: String) {
                 return@addOnSuccessListener
             }
 
-            // Create new order
+          
             val order = hashMapOf(
                 "productId" to productId,
                 "productName" to product["name"],
-                "productImage" to product["imageUrl"], // Add product image URL
+                "productImage" to product["imageUrl"], 
                 "price" to product["price"],
                 "userId" to user.uid,
                 "userName" to (user.displayName ?: "Unknown User"),
@@ -830,7 +829,7 @@ fun updateProfile(profileData: String) {
             "updatedAt" to Date()
         )
 
-        // Update the profile
+        
         firestore.collection("users").document(user.uid)
             .update(updates)
             .addOnSuccessListener {
@@ -895,7 +894,7 @@ fun updateProfileImage(imageData: String) {
             if (task.isSuccessful) {
                 val downloadUrl = task.result.toString()
                 
-                // Update user profile with new image URL
+                
                 firestore.collection("users").document(user.uid)
                     .update("profileImage", downloadUrl)
                     .addOnSuccessListener {
@@ -954,16 +953,13 @@ fun initializeChat(otherUserId: String) {
         return
     }
 
-    // Create or get chat ID (combine user IDs in alphabetical order)
     val chatParticipants = listOf(user.uid, otherUserId).sorted()
     val chatId = "chat_${chatParticipants[0]}_${chatParticipants[1]}"
 
-    // First ensure chat document exists with proper permissions
     firestore.collection("chats").document(chatId)
         .get()
         .addOnSuccessListener { document ->
             if (!document.exists()) {
-                // Create new chat document
                 val chatData = hashMapOf(
                     "participants" to mapOf(
                         user.uid to true,
@@ -987,7 +983,7 @@ fun initializeChat(otherUserId: String) {
                     }
             }
 
-            // Set up real-time listener for messages
+            
             firestore.collection("chats").document(chatId)
                 .collection("messages")
                 .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
@@ -1012,7 +1008,7 @@ fun initializeChat(otherUserId: String) {
                     }
                 }
 
-            // Store chat ID in memory for sending messages
+
             runOnUiThread {
                 webView?.evaluateJavascript(
                     "chatId = '$chatId'",
@@ -1061,6 +1057,313 @@ fun sendMessage(chatId: String, message: String) {
                     "showError('Failed to send message: ${e.message?.replace("'", "\\'")}')",
                     null
                 )
+            }
+        }
+}
+
+
+@JavascriptInterface
+fun confirmOrder(orderData: String) {
+    try {
+        val data = JSONObject(orderData)
+        val user = auth.currentUser
+        if (user == null) {
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('User not authenticated')",
+                    null
+                )
+            }
+            return
+        }
+
+        // Create order document
+        val order = hashMapOf(
+            "userId" to user.uid,
+            "productId" to data.getString("productId"),
+            "quantity" to data.getInt("quantity"),
+            "deliveryAddress" to data.getString("address"),
+            "phoneNumber" to data.getString("phone"),
+            "deliveryMethod" to data.getString("deliveryMethod"),
+            "paymentMethod" to data.getString("paymentMethod"),
+            "status" to "PENDING",
+            "createdAt" to Date()
+        )
+
+        firestore.collection("orders")
+            .add(order)
+            .addOnSuccessListener { documentReference ->
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        """
+                        showSuccess('Order placed successfully');
+                        setTimeout(() => {
+                            window.location.href = 'payment.html?orderId=${documentReference.id}&method=${data.getString("paymentMethod")}';
+                        }, 1500);
+                        """.trimIndent(),
+                        null
+                    )
+                }
+            }
+            .addOnFailureListener { e ->
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Failed to place order: ${e.message?.replace("'", "\\'")}')",
+                        null
+                    )
+                }
+            }
+
+    } catch (e: Exception) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('Error processing order: ${e.message?.replace("'", "\\'")}')",
+                null
+            )
+        }
+    }
+}
+
+
+@JavascriptInterface
+fun verifyPayment(orderId: String, reference: String) {
+    val user = auth.currentUser
+    if (user == null) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('User not authenticated')",
+                null
+            )
+        }
+        return
+    }
+
+    // First verify the order exists and belongs to the user
+    firestore.collection("orders").document(orderId)
+        .get()
+        .addOnSuccessListener { document ->
+            if (!document.exists()) {
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Order not found')",
+                        null
+                    )
+                }
+                return@addOnSuccessListener
+            }
+
+            val order = document.data
+            if (order?.get("userId") != user.uid) {
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Unauthorized access to this order')",
+                        null
+                    )
+                }
+                return@addOnSuccessListener
+            }
+
+            // Update order with payment reference and status
+            firestore.collection("orders").document(orderId)
+                .update(
+                    mapOf(
+                        "paymentReference" to reference,
+                        "paymentStatus" to "VERIFIED",
+                        "status" to "PROCESSING",
+                        "updatedAt" to Date()
+                    )
+                )
+                .addOnSuccessListener {
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "handlePaymentSuccess()",
+                            null
+                        )
+                    }
+                }
+                .addOnFailureListener { e ->
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "handlePaymentError('${e.message?.replace("'", "\\'")}')",
+                            null
+                        )
+                    }
+                }
+        }
+        .addOnFailureListener { e ->
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "handlePaymentError('${e.message?.replace("'", "\\'")}')",
+                    null
+                )
+            }
+        }
+}
+
+@JavascriptInterface
+fun getOrderDetails(orderId: String) {
+    val user = auth.currentUser
+    if (user == null) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('User not authenticated')",
+                null
+            )
+        }
+        return
+    }
+
+    firestore.collection("orders").document(orderId)
+        .get()
+        .addOnSuccessListener { document ->
+            if (!document.exists()) {
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Order not found')",
+                        null
+                    )
+                }
+                return@addOnSuccessListener
+            }
+
+            val order = document.data
+            if (order?.get("userId") != user.uid) {
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "showError('Unauthorized access to this order')",
+                        null
+                    )
+                }
+                return@addOnSuccessListener
+            }
+
+            val orderDetails = mapOf(
+                "orderAmount" to (order["price"] as Double),
+                "deliveryFee" to (order["deliveryFee"] as? Double ?: 0.0),
+                "totalAmount" to ((order["price"] as Double) + (order["deliveryFee"] as? Double ?: 0.0)),
+                "merchantNumber" to "0976000000" // To be Replaced with actual merchant number in production
+            )
+
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "updateOrderDetails(${Gson().toJson(orderDetails)})",
+                    null
+                )
+            }
+        }
+        .addOnFailureListener { e ->
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Failed to load order details: ${e.message?.replace("'", "\\'")}')",
+                    null
+                )
+            }
+        }
+}
+
+@JavascriptInterface
+fun confirmCashOrder(orderId: String) {
+    val user = auth.currentUser
+    if (user == null) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('User not authenticated')",
+                null
+            )
+        }
+        return
+    }
+
+    firestore.collection("orders").document(orderId)
+        .update(
+            mapOf(
+                "paymentMethod" to "CASH",
+                "paymentStatus" to "PENDING",
+                "status" to "PROCESSING",
+                "updatedAt" to Date()
+            )
+        )
+        .addOnSuccessListener {
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    """
+                    showSuccess('Order confirmed successfully');
+                    setTimeout(() => { window.location.href = 'orders.html'; }, 1500);
+                    """.trimIndent(),
+                    null
+                )
+            }
+        }
+        .addOnFailureListener { e ->
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Failed to confirm order: ${e.message?.replace("'", "\\'")}')",
+                    null
+                )
+            }
+        }
+}
+
+@JavascriptInterface
+fun sendMessage(chatId: String, message: String) {
+    val user = auth.currentUser
+    if (user == null) {
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "showError('User not authenticated')",
+                null
+            )
+        }
+        return
+    }
+
+    val messageData = hashMapOf(
+        "senderId" to user.uid,
+        "text" to message,
+        "timestamp" to Date()
+    )
+
+    firestore.collection("chats").document(chatId)
+        .collection("messages")
+        .add(messageData)
+        .addOnFailureListener { e ->
+            Log.e("Chat", "Failed to send message", e)
+            runOnUiThread {
+                webView?.evaluateJavascript(
+                    "showError('Failed to send message')",
+                    null
+                )
+            }
+        }
+}
+
+// Complete the existing initializeChat function with message handling
+private fun setupMessageListener(chatId: String) {
+    firestore.collection("chats").document(chatId)
+        .collection("messages")
+        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
+        .addSnapshotListener { snapshots, e ->
+            if (e != null) {
+                Log.e("Chat", "Listen failed", e)
+                return@addSnapshotListener
+            }
+
+            snapshots?.documentChanges?.forEach { dc ->
+                val messageData = dc.document.data
+                val currentUser = auth.currentUser
+                
+                val messageJson = JSONObject().apply {
+                    put("text", messageData["text"])
+                    put("timestamp", (messageData["timestamp"] as Date).time)
+                    put("isSent", messageData["senderId"] == currentUser?.uid)
+                }
+
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "renderMessage(${messageJson})",
+                        null
+                    )
+                }
             }
         }
 }
