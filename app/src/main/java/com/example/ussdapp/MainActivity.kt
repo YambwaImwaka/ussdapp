@@ -402,15 +402,20 @@ class MainActivity : ComponentActivity() {
                 }
         }
 
-        @JavascriptInterface
-        fun addProduct(productData: String) {
-            try {
-                Log.d("ProductCreation", "Received product data: ${productData.take(200)}...")
+@JavascriptInterface
+fun addProduct(productData: String) {
+    try {
+        val user = auth.currentUser
+        if (user == null) throw Exception("User not authenticated")
+        
+        // First get the user's data from Firestore
+        firestore.collection("users").document(user.uid)
+            .get()
+            .addOnSuccessListener { userDoc ->
+                val displayName = userDoc.getString("displayName") ?: "Unknown Farmer"
                 
+                // Continue with product creation
                 val data = JSONObject(productData)
-                val user = auth.currentUser
-                
-                if (user == null) throw Exception("User not authenticated")
                 if (!data.has("image")) throw Exception("Missing image data")
                 if (!data.has("name") || data.getString("name").isBlank()) throw Exception("Invalid product name")
                 if (!data.has("price") || data.getDouble("price") <= 0) throw Exception("Invalid price")
@@ -420,25 +425,17 @@ class MainActivity : ComponentActivity() {
                 if (imageParts.size < 2) throw Exception("Invalid image format")
                 val imageData = imageParts.last().trim()
 
-                Log.d("ProductCreation", "Decoding image data (length: ${imageData.length})")
-
                 val imageBytes = try {
                     android.util.Base64.decode(imageData, android.util.Base64.NO_WRAP)
                 } catch (e: Exception) {
                     throw Exception("Invalid image encoding: ${e.message}")
                 }
 
-                val storageRef = FirebaseStorage.getInstance().reference
+                val storageRef = storage.reference
                 val imageRef = storageRef.child("product_images/${UUID.randomUUID()}.jpg")
-
                 val uploadTask = imageRef.putBytes(imageBytes)
                 
-                uploadTask.addOnProgressListener { taskSnapshot ->
-                    val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
-                    webView?.evaluateJavascript("updateUploadProgress($progress)", null)
-                }
-
-                uploadTask.addOnSuccessListener { taskSnapshot ->
+                uploadTask.addOnSuccessListener { _ ->
                     imageRef.downloadUrl.addOnSuccessListener { uri ->
                         val product = hashMapOf(
                             "name" to data.getString("name"),
@@ -446,12 +443,12 @@ class MainActivity : ComponentActivity() {
                             "description" to data.getString("description"),
                             "imageUrl" to uri.toString(),
                             "farmerId" to user.uid,
-                            "farmerName" to (user.displayName ?: "Unknown Farmer"),
+                            "farmerName" to displayName,  // Use the name from Firestore
                             "createdAt" to Date(),
                             "status" to "active"
                         )
 
-                        FirebaseFirestore.getInstance().collection("products")
+                        firestore.collection("products")
                             .add(product)
                             .addOnSuccessListener {
                                 Log.d("ProductCreation", "Product created successfully")
@@ -467,11 +464,15 @@ class MainActivity : ComponentActivity() {
                 }.addOnFailureListener { e ->
                     handleError("Image upload failed: ${e.message}", e)
                 }
-
-            } catch (e: Exception) {
-                handleError("Product creation error: ${e.message}", e)
             }
-        }
+            .addOnFailureListener { e ->
+                handleError("Failed to get user data: ${e.message}", e)
+            }
+
+    } catch (e: Exception) {
+        handleError("Product creation error: ${e.message}", e)
+    }
+}
 
         private fun handleError(message: String, e: Exception) {
             val sanitizedMessage = message.replace("'", "")
@@ -721,6 +722,7 @@ fun updateOrderStatus(orderId: String, status: String) {
         }
 }
 
+
 @JavascriptInterface
 fun placeOrder(productId: String) {
     val user = auth.currentUser
@@ -734,85 +736,100 @@ fun placeOrder(productId: String) {
         return
     }
 
-  
-    firestore.collection("products").document(productId)
+    // First get the current user's data
+    firestore.collection("users").document(user.uid)
         .get()
-        .addOnSuccessListener { document ->
-            val product = document.data
-            if (product == null) {
-                runOnUiThread {
-                    webView?.evaluateJavascript(
-                        "showError('Product not found')",
-                        null
-                    )
-                }
-                return@addOnSuccessListener
-            }
-
-          
-            val order = hashMapOf(
-                "productId" to productId,
-                "productName" to product["name"],
-                "productImage" to product["imageUrl"], 
-                "price" to product["price"],
-                "userId" to user.uid,
-                "userName" to (user.displayName ?: "Unknown User"),
-                "farmerId" to product["farmerId"],
-                "farmerName" to product["farmerName"],
-                "status" to "PENDING",
-                "createdAt" to Date(),
-                "updatedAt" to Date()
-            )
-
-            firestore.collection("orders")
-                .add(order)
-                .addOnSuccessListener { docRef ->
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            """
-                            if (typeof showSuccess === 'function') {
-                                showSuccess('Order placed successfully');
-                                setTimeout(() => { window.location.href = 'orders.html'; }, 1500);
-                            } else {
-                                alert('Order placed successfully');
-                                window.location.href = 'orders.html';
-                            }
-                            """.trimIndent(),
-                            null
-                        )
+        .addOnSuccessListener { userDoc ->
+            val buyerName = userDoc.getString("displayName") ?: "Unknown User"
+            
+            // Then get the product
+            firestore.collection("products").document(productId)
+                .get()
+                .addOnSuccessListener { productDoc ->
+                    val product = productDoc.data
+                    if (product == null) {
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "showError('Product not found')",
+                                null
+                            )
+                        }
+                        return@addOnSuccessListener
                     }
+
+                    // Now get the farmer's data
+                    val farmerId = product["farmerId"] as String
+                    firestore.collection("users").document(farmerId)
+                        .get()
+                        .addOnSuccessListener { farmerDoc ->
+                            val farmerName = farmerDoc.getString("displayName") ?: "Unknown Farmer"
+
+                            val order = hashMapOf(
+                                "productId" to productId,
+                                "productName" to product["name"],
+                                "productImage" to product["imageUrl"],
+                                "price" to product["price"],
+                                "userId" to user.uid,
+                                "userName" to buyerName,  // Use buyer's name from Firestore
+                                "farmerId" to farmerId,
+                                "farmerName" to farmerName,  // Use farmer's name from Firestore
+                                "status" to "PENDING",
+                                "createdAt" to Date(),
+                                "updatedAt" to Date()
+                            )
+
+                            firestore.collection("orders")
+                                .add(order)
+                                .addOnSuccessListener { docRef ->
+                                    runOnUiThread {
+                                        webView?.evaluateJavascript(
+                                            """
+                                            if (typeof showSuccess === 'function') {
+                                                showSuccess('Order placed successfully');
+                                                setTimeout(() => { window.location.href = 'orders.html'; }, 1500);
+                                            } else {
+                                                alert('Order placed successfully');
+                                                window.location.href = 'orders.html';
+                                            }
+                                            """.trimIndent(),
+                                            null
+                                        )
+                                    }
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("Orders", "Failed to create order: ${e.message}")
+                                    showError("Failed to place order: ${e.message}")
+                                }
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e("Orders", "Failed to get farmer data: ${e.message}")
+                            showError("Failed to get farmer data: ${e.message}")
+                        }
                 }
                 .addOnFailureListener { e ->
-                    Log.e("Orders", "Failed to create order: ${e.message}")
-                    runOnUiThread {
-                        webView?.evaluateJavascript(
-                            """
-                            if (typeof showError === 'function') {
-                                showError('Failed to place order: ${e.message?.replace("'", "\\'")}');
-                            } else {
-                                alert('Failed to place order: ${e.message?.replace("'", "\\'")}');
-                            }
-                            """.trimIndent(),
-                            null
-                        )
-                    }
+                    Log.e("Orders", "Failed to fetch product: ${e.message}")
+                    showError("Failed to fetch product: ${e.message}")
                 }
         }
         .addOnFailureListener { e ->
-            Log.e("Orders", "Failed to fetch product: ${e.message}")
-            runOnUiThread {
-                webView?.evaluateJavascript(
-                    """
-                    if (typeof showError === 'function') {
-                        showError('Failed to fetch product: ${e.message?.replace("'", "\\'")}');
-                    } else {
-                        alert('Failed to fetch product: ${e.message?.replace("'", "\\'")}');
-                    }
-                    """.trimIndent(),
-                    null
-                )
-            }
+            Log.e("Orders", "Failed to get user data: ${e.message}")
+            showError("Failed to get user data: ${e.message}")
         }
+}
+
+private fun showError(message: String) {
+    runOnUiThread {
+        webView?.evaluateJavascript(
+            """
+            if (typeof showError === 'function') {
+                showError('${message.replace("'", "\\'")}');
+            } else {
+                alert('${message.replace("'", "\\'")}');
+            }
+            """.trimIndent(),
+            null
+        )
+    }
 }
 
 @JavascriptInterface

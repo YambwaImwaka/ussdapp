@@ -271,27 +271,52 @@
                 window.AndroidInterface.getProductDetails(productId);
             }
         }
+        
+    //
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('productId');
+    
+    if (productId && window.AndroidInterface) {
+        console.log('Fetching product details for checkout:', productId);
+        window.AndroidInterface.getProductDetails(productId);
+    } else {
+        console.error('No product ID provided or AndroidInterface not available');
+        showError('Invalid product ID or missing Android interface');
+    }
+});
 
-        function renderCheckoutSummary(product) {
-            currentProduct = product;
-            const container = document.getElementById('orderSummary');
-            const subtotal = product.price * quantity;
-            
-            container.innerHTML = `
-                <div class="summary-item">
-                    <div>${product.name} x ${quantity}</div>
-                    <div>K${subtotal.toFixed(2)}</div>
-                </div>
-                <div class="summary-item">
-                    <div>Delivery Fee</div>
-                    <div id="deliveryFee">K0.00</div>
-                </div>
-                <div class="summary-item total">
-                    <div>Total</div>
-                    <div id="totalAmount">K${subtotal.toFixed(2)}</div>
-                </div>
-            `;
-        }
+function renderCheckoutSummary(product) {
+    console.log('Rendering checkout summary:', product);
+    if (!product || !product.id) {
+        showError('Invalid product data');
+        return;
+    }
+
+    const container = document.getElementById('orderSummary');
+    if (!container) {
+        console.error('Order summary container not found');
+        return;
+    }
+
+    const quantity = parseInt(new URLSearchParams(window.location.search).get('quantity')) || 1;
+    const subtotal = product.price * quantity;
+    
+    container.innerHTML = `
+        <div class="summary-item">
+            <div>${product.name} x ${quantity}</div>
+            <div>K${subtotal.toFixed(2)}</div>
+        </div>
+        <div class="summary-item">
+            <div>Delivery Fee</div>
+            <div id="deliveryFee">K0.00</div>
+        </div>
+        <div class="summary-item total">
+            <div>Total</div>
+            <div id="totalAmount">K${subtotal.toFixed(2)}</div>
+        </div>
+    `;
+}
 
         function selectDelivery(type) {
             selectedDelivery = type;
