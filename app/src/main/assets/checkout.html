@@ -354,3 +354,8 @@
                 paymentMethod: selectedPayment,
                 deliveryFee: selectedDelivery === 'express' ? 100 : 50
             };
+            
+  if (window.AndroidInterface && window.AndroidInterface.confirmOrder) {
+        window.AndroidInterface.confirmOrder(JSON.stringify(orderDetails));
+    }
+}

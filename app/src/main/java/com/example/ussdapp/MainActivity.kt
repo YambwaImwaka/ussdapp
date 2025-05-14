@@ -504,8 +504,7 @@ class MainActivity : ComponentActivity() {
         }
         
         
-        
-  @JavascriptInterface
+@JavascriptInterface
 fun getProductDetails(productId: String) {
     Log.d("ProductDetails", "Fetching product: $productId")
     firestore.collection("products").document(productId)
@@ -516,7 +515,14 @@ fun getProductDetails(productId: String) {
                 productData["id"] = document.id
                 runOnUiThread {
                     webView?.evaluateJavascript(
-                        "renderProductDetails(${Gson().toJson(productData)})", 
+                        // Use different render functions based on the page
+                        """
+                        if (window.location.href.includes('checkout.html')) {
+                            renderCheckoutSummary(${Gson().toJson(productData)});
+                        } else {
+                            renderProductDetails(${Gson().toJson(productData)});
+                        }
+                        """.trimIndent(),
                         null
                     )
                 }
@@ -1027,10 +1033,10 @@ fun initializeChat(otherUserId: String) {
         }
 }
 
+
 @JavascriptInterface
-fun confirmOrder(orderData: String) {
+fun confirmOrder(orderDataString: String) {
     try {
-        val data = JSONObject(orderData)
         val user = auth.currentUser
         if (user == null) {
             runOnUiThread {
@@ -1042,47 +1048,80 @@ fun confirmOrder(orderData: String) {
             return
         }
 
-        // Create order document
-        val order = hashMapOf(
-            "userId" to user.uid,
-            "productId" to data.getString("productId"),
-            "quantity" to data.getInt("quantity"),
-            "deliveryAddress" to data.getString("address"),
-            "phoneNumber" to data.getString("phone"),
-            "deliveryMethod" to data.getString("deliveryMethod"),
-            "paymentMethod" to data.getString("paymentMethod"),
-            "status" to "PENDING",
-            "createdAt" to Date()
-        )
+        val orderData = JSONObject(orderDataString)
+        
+        // Validate required fields
+        if (!orderData.has("productId") || !orderData.has("quantity") || 
+            !orderData.has("deliveryAddress") || !orderData.has("phoneNumber") ||
+            !orderData.has("deliveryMethod") || !orderData.has("paymentMethod")) {
+            throw Exception("Missing required order details")
+        }
 
-        firestore.collection("orders")
-            .add(order)
-            .addOnSuccessListener { documentReference ->
-                runOnUiThread {
-                    webView?.evaluateJavascript(
-                        """
-                        showSuccess('Order placed successfully');
-                        setTimeout(() => {
-                            window.location.href = 'payment.html?orderId=${documentReference.id}&method=${data.getString("paymentMethod")}';
-                        }, 1500);
-                        """.trimIndent(),
-                        null
-                    )
+        // Get product details to calculate final price
+        firestore.collection("products").document(orderData.getString("productId"))
+            .get()
+            .addOnSuccessListener { document ->
+                if (!document.exists()) {
+                    throw Exception("Product not found")
                 }
+
+                val product = document.data!!
+                val deliveryFee = when(orderData.getString("deliveryMethod")) {
+                    "express" -> 100.0
+                    "standard" -> 50.0
+                    else -> 0.0
+                }
+
+                val order = hashMapOf(
+                    "productId" to orderData.getString("productId"),
+                    "productName" to product["name"],
+                    "productImage" to product["imageUrl"],
+                    "quantity" to orderData.getInt("quantity"),
+                    "price" to (product["price"] as Double),
+                    "deliveryFee" to deliveryFee,
+                    "totalAmount" to ((product["price"] as Double) * orderData.getInt("quantity") + deliveryFee),
+                    "deliveryAddress" to orderData.getString("deliveryAddress"),
+                    "phoneNumber" to orderData.getString("phoneNumber"),
+                    "deliveryMethod" to orderData.getString("deliveryMethod"),
+                    "paymentMethod" to orderData.getString("paymentMethod"),
+                    "userId" to user.uid,
+                    "userName" to (user.displayName ?: "Unknown User"),
+                    "farmerId" to product["farmerId"],
+                    "farmerName" to product["farmerName"],
+                    "status" to "PENDING",
+                    "paymentStatus" to "PENDING",
+                    "createdAt" to Date(),
+                    "updatedAt" to Date()
+                )
+
+                firestore.collection("orders")
+                    .add(order)
+                    .addOnSuccessListener { docRef ->
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                """
+                                showSuccess('Order created successfully');
+                                setTimeout(() => {
+                                    window.location.href = 'payment.html?orderId=${docRef.id}&method=${orderData.getString("paymentMethod")}';
+                                }, 1000);
+                                """.trimIndent(),
+                                null
+                            )
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        throw Exception("Failed to create order: ${e.message}")
+                    }
             }
             .addOnFailureListener { e ->
-                runOnUiThread {
-                    webView?.evaluateJavascript(
-                        "showError('Failed to place order: ${e.message?.replace("'", "\\'")}')",
-                        null
-                    )
-                }
+                throw Exception("Failed to fetch product details: ${e.message}")
             }
 
     } catch (e: Exception) {
+        Log.e("Order", "Error creating order: ${e.message}", e)
         runOnUiThread {
             webView?.evaluateJavascript(
-                "showError('Error processing order: ${e.message?.replace("'", "\\'")}')",
+                "showError('${e.message?.replace("'", "\\'")}')",
                 null
             )
         }
