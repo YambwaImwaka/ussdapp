@@ -1028,41 +1028,6 @@ fun initializeChat(otherUserId: String) {
 }
 
 @JavascriptInterface
-fun sendMessage(chatId: String, message: String) {
-    val user = auth.currentUser
-    if (user == null) {
-        runOnUiThread {
-            webView?.evaluateJavascript(
-                "showError('User not authenticated')",
-                null
-            )
-        }
-        return
-    }
-
-    val messageData = hashMapOf(
-        "text" to message,
-        "senderId" to user.uid,
-        "senderName" to (user.displayName ?: "Unknown User"),
-        "timestamp" to Date()
-    )
-
-    firestore.collection("chats").document(chatId)
-        .collection("messages")
-        .add(messageData)
-        .addOnFailureListener { e ->
-            Log.e("Chat", "Error sending message", e)
-            runOnUiThread {
-                webView?.evaluateJavascript(
-                    "showError('Failed to send message: ${e.message?.replace("'", "\\'")}')",
-                    null
-                )
-            }
-        }
-}
-
-
-@JavascriptInterface
 fun confirmOrder(orderData: String) {
     try {
         val data = JSONObject(orderData)
@@ -1304,6 +1269,7 @@ fun confirmCashOrder(orderId: String) {
         }
 }
 
+
 @JavascriptInterface
 fun sendMessage(chatId: String, message: String) {
     val user = auth.currentUser
@@ -1326,11 +1292,19 @@ fun sendMessage(chatId: String, message: String) {
     firestore.collection("chats").document(chatId)
         .collection("messages")
         .add(messageData)
+        .addOnSuccessListener { 
+            // Success case
+            firestore.collection("chats").document(chatId)
+                .update("lastMessage", message, "lastMessageTimestamp", Date())
+                .addOnFailureListener { e ->
+                    Log.e("Chat", "Failed to update last message", e)
+                }
+        }
         .addOnFailureListener { e ->
             Log.e("Chat", "Failed to send message", e)
             runOnUiThread {
                 webView?.evaluateJavascript(
-                    "showError('Failed to send message')",
+                    "showError('Failed to send message: ${e.message?.replace("'", "\\'")}')",
                     null
                 )
             }
