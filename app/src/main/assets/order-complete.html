@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Complete - Farm Fresh Zambia</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F1F2F6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .success-container {
+            background: white;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            margin: 20px;
+        }
+        
+        .success-icon {
+            color: #45A29E;
+            font-size: 64px;
+            margin-bottom: 24px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 16px;
+            font-size: 24px;
+        }
+        
+        p {
+            color: #666;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+        
+        .home-button {
+            background: #45A29E;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: background-color 0.3s ease;
+        }
+        
+        .home-button:hover {
+            background: #3d8f8a;
+        }
+        
+        .redirect-message {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="success-container">
+        <div class="success-icon">✓</div>
+        <h1>Order Completed Successfully!</h1>
+        <p>Thank you for your order. Your purchase has been confirmed and will be processed shortly.</p>
+        <a href="home.html" class="home-button">Return to Home</a>
+        <div class="redirect-message">You will be redirected to the home page in <span id="countdown">5</span> seconds...</div>
+    </div>
+    
+    <script>
+        let timeLeft = 5;
+        const countdownElement = document.getElementById('countdown');
+        
+        const countdown = setInterval(() => {
+            timeLeft--;
+            countdownElement.textContent = timeLeft;
+            
+            if (timeLeft <= 0) {
+                clearInterval(countdown);
+                window.location.href = 'home.html';
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

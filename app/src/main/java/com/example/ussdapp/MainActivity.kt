@@ -1107,16 +1107,22 @@ fun confirmOrder(orderDataString: String) {
                     .addOnSuccessListener { docRef ->
                         runOnUiThread {
                             webView?.evaluateJavascript(
-                                """
-                                showSuccess('Order created successfully');
-                                setTimeout(() => {
-                                    window.location.href = 'payment.html?orderId=${docRef.id}&method=${orderData.getString("paymentMethod")}';
-                                }, 1000);
-                                """.trimIndent(),
-                                null
-                            )
+                        """
+                        if (typeof showSuccess === 'function') {
+                            showSuccess('Order placed successfully');
+                            setTimeout(() => {
+                                window.location.href = 'order-complete.html';
+                            }, 1000);
+                        } else {
+                            alert('Order placed successfully');
+                            window.location.href = 'order-complete.html';
+                        }
+                        """.trimIndent(),
+                        null
+                    )
                         }
                     }
+
                     .addOnFailureListener { e ->
                         throw Exception("Failed to create order: ${e.message}")
                     }
