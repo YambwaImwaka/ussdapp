@@ -1301,17 +1301,11 @@ fun confirmCashOrder(orderId: String) {
                 "updatedAt" to Date()
             )
         )
-        .addOnSuccessListener {
-            runOnUiThread {
-                webView?.evaluateJavascript(
-                    """
-                    showSuccess('Order confirmed successfully');
-                    setTimeout(() => { window.location.href = 'orders.html'; }, 1500);
-                    """.trimIndent(),
-                    null
-                )
-            }
-        }
+        .addOnSuccessListener { docRef ->
+    runOnUiThread {
+        webView?.loadUrl("file:///android_asset/order-complete.html")
+    }
+}
         .addOnFailureListener { e ->
             runOnUiThread {
                 webView?.evaluateJavascript(
