@@ -168,67 +168,73 @@
         let chatId = null;
         let otherUserId = null;
 
-        function updateTimestamp() {
-            const now = new Date();
-            const formatted = now.getUTCFullYear() + '-' + 
-                            String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
-                            String(now.getUTCDate()).padStart(2, '0') + ' ' +
-                            String(now.getUTCHours()).padStart(2, '0') + ':' +
-                            String(now.getUTCMinutes()).padStart(2, '0') + ':' +
-                            String(now.getUTCSeconds()).padStart(2, '0');
-            document.getElementById('timestamp').textContent = formatted;
-        }
+function initializeChat() {
+    const urlParams = new URLSearchParams(window.location.search);
+    otherUserId = urlParams.get('farmerId') || urlParams.get('userId');
+    
+    if (window.AndroidInterface && window.AndroidInterface.initializeChat) {
+        window.AndroidInterface.initializeChat(otherUserId);
+    }
+}
 
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
-        }
+function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    if (window.AndroidInterface && window.AndroidInterface.sendMessage) {
+        const messageElement = createMessageElement(message, true);
+        document.getElementById('messageContainer').appendChild(messageElement);
+        
+        window.AndroidInterface.sendMessage(chatId, message);
+        input.value = '';
+        scrollToBottom();
+    }
+}
 
-        function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-            
-            if (message && window.AndroidInterface && window.AndroidInterface.sendMessage) {
-                window.AndroidInterface.sendMessage(chatId, message);
-                input.value = '';
-            }
-        }
+function createMessageElement(message, isSent) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+    
+    const time = new Date().toLocaleTimeString();
+    messageDiv.innerHTML = `
+        ${message}
+        <div class="message-time">${time}</div>
+    `;
+    
+    return messageDiv;
+}
 
-        function renderMessage(message) {
-            const container = document.getElementById('messageContainer');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${message.isSent ? 'sent' : 'received'}`;
-            
-            const time = new Date(message.timestamp).toLocaleTimeString();
-            messageDiv.innerHTML = `
-                ${message.text}
-                <div class="message-time">${time}</div>
-            `;
-            
-            container.appendChild(messageDiv);
-            container.scrollTop = container.scrollHeight;
-        }
+function renderMessage(messageData) {
+    const container = document.getElementById('messageContainer');
+    const messageDiv = createMessageElement(messageData.text, messageData.isSent);
+    container.appendChild(messageDiv);
+    scrollToBottom();
+}
 
-        function initializeChat() {
-            const urlParams = new URLSearchParams(window.location.search);
-            otherUserId = urlParams.get('farmerId') || urlParams.get('userId');
-            
-            if (window.AndroidInterface && window.AndroidInterface.initializeChat) {
-                window.AndroidInterface.initializeChat(otherUserId);
-            }
-        }
+function scrollToBottom() {
+    const container = document.getElementById('messageContainer');
+    container.scrollTop = container.scrollHeight;
+}
 
-        function updateChatHeader(userData) {
-            document.getElementById('chatWithUser').textContent = `Chat with ${userData.displayName}`;
-        }
+function updateChatHeader(userData) {
+    document.getElementById('chatWithUser').textContent = `Chat with ${userData.displayName}`;
+}
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            updateTimestamp();
-            setInterval(updateTimestamp, 1000);
-            initializeChat();
-        });
+// Handle errors
+window.showError = function(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.textContent = message;
+    document.body.appendChild(errorDiv);
+    setTimeout(() => errorDiv.remove(), 3000);
+};
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    initializeChat();
+});
     </script>
 </body>
 </html>

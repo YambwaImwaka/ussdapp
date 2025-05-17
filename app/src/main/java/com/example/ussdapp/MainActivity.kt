@@ -962,7 +962,6 @@ fun updateProfileImage(imageData: String) {
     }
 }
 
-
 @JavascriptInterface
 fun initializeChat(otherUserId: String) {
     val user = auth.currentUser
@@ -979,6 +978,9 @@ fun initializeChat(otherUserId: String) {
     val chatParticipants = listOf(user.uid, otherUserId).sorted()
     val chatId = "chat_${chatParticipants[0]}_${chatParticipants[1]}"
 
+    // Set up the message listener immediately
+    setupMessageListener(chatId)
+
     firestore.collection("chats").document(chatId)
         .get()
         .addOnSuccessListener { document ->
@@ -994,6 +996,15 @@ fun initializeChat(otherUserId: String) {
                 
                 firestore.collection("chats").document(chatId)
                     .set(chatData)
+                    .addOnSuccessListener {
+                        // Initialize chat UI after successful creation
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "chatId = '$chatId'",
+                                null
+                            )
+                        }
+                    }
                     .addOnFailureListener { e ->
                         Log.e("Chat", "Failed to create chat document", e)
                         runOnUiThread {
@@ -1002,51 +1013,31 @@ fun initializeChat(otherUserId: String) {
                                 null
                             )
                         }
-                        return@addOnFailureListener
                     }
+            } else {
+                // Chat already exists, just initialize the UI
+                runOnUiThread {
+                    webView?.evaluateJavascript(
+                        "chatId = '$chatId'",
+                        null
+                    )
+                }
             }
 
-            
-            firestore.collection("chats").document(chatId)
-                .collection("messages")
-                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
-                .addSnapshotListener { snapshots, e ->
-                    if (e != null) {
-                        Log.e("Chat", "Listen failed", e)
-                        return@addSnapshotListener
-                    }
-
-                    snapshots?.documentChanges?.forEach { dc ->
-                        if (dc.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                            val messageData = dc.document.data
-                            messageData["isSent"] = messageData["senderId"] == user.uid
-                            
-                            runOnUiThread {
-                                webView?.evaluateJavascript(
-                                    "renderMessage(${Gson().toJson(messageData)})",
-                                    null
-                                )
-                            }
+            // Get other user's details
+            firestore.collection("users").document(otherUserId)
+                .get()
+                .addOnSuccessListener { userDoc ->
+                    val userData = userDoc.data
+                    if (userData != null) {
+                        runOnUiThread {
+                            webView?.evaluateJavascript(
+                                "updateChatHeader(${Gson().toJson(userData)})",
+                                null
+                            )
                         }
                     }
                 }
-
-
-            runOnUiThread {
-                webView?.evaluateJavascript(
-                    "chatId = '$chatId'",
-                    null
-                )
-            }
-        }
-        .addOnFailureListener { e ->
-            Log.e("Chat", "Failed to check chat document", e)
-            runOnUiThread {
-                webView?.evaluateJavascript(
-                    "showError('Failed to initialize chat')",
-                    null
-                )
-            }
         }
 }
 
@@ -1339,35 +1330,44 @@ fun sendMessage(chatId: String, message: String) {
         return
     }
 
-    val messageData = hashMapOf(
-        "senderId" to user.uid,
-        "text" to message,
-        "timestamp" to Date()
-    )
+    // Get user's display name first
+    firestore.collection("users").document(user.uid)
+        .get()
+        .addOnSuccessListener { userDoc ->
+            val senderName = userDoc.getString("displayName") ?: "Unknown User"
+            
+            val messageData = hashMapOf(
+                "senderId" to user.uid,
+                "senderName" to senderName,
+                "text" to message,
+                "timestamp" to Date()
+            )
 
-    firestore.collection("chats").document(chatId)
-        .collection("messages")
-        .add(messageData)
-        .addOnSuccessListener { 
-            // Success case
             firestore.collection("chats").document(chatId)
-                .update("lastMessage", message, "lastMessageTimestamp", Date())
-                .addOnFailureListener { e ->
-                    Log.e("Chat", "Failed to update last message", e)
+                .collection("messages")
+                .add(messageData)
+                .addOnSuccessListener { 
+                    // Update last message in chat document
+                    firestore.collection("chats").document(chatId)
+                        .update(
+                            mapOf(
+                                "lastMessage" to message,
+                                "lastMessageTimestamp" to Date()
+                            )
+                        )
                 }
-        }
-        .addOnFailureListener { e ->
-            Log.e("Chat", "Failed to send message", e)
-            runOnUiThread {
-                webView?.evaluateJavascript(
-                    "showError('Failed to send message: ${e.message?.replace("'", "\\'")}')",
-                    null
-                )
-            }
+                .addOnFailureListener { e ->
+                    Log.e("Chat", "Failed to send message", e)
+                    runOnUiThread {
+                        webView?.evaluateJavascript(
+                            "showError('Failed to send message: ${e.message?.replace("'", "\\'")}')",
+                            null
+                        )
+                    }
+                }
         }
 }
 
-// Complete the existing initializeChat function with message handling
 private fun setupMessageListener(chatId: String) {
     firestore.collection("chats").document(chatId)
         .collection("messages")
@@ -1396,6 +1396,11 @@ private fun setupMessageListener(chatId: String) {
                 }
             }
         }
+}
+
+private fun clearMessageListener() {
+    // Implement this when you add support for cleaning up listeners
+    // when the chat is closed
 }
 
         @JavascriptInterface
