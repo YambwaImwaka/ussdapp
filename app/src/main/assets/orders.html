@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Orders - Farm Fresh Zambia</title>
-  
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -52,6 +51,30 @@
             margin-right: auto;
         }
 
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-button {
+            padding: 8px 16px;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            background: white;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .filter-button.active {
+            background: #45A29E;
+            color: white;
+            border-color: #45A29E;
+        }
+
         .orders-container {
             background: white;
             border-radius: 12px;
@@ -62,14 +85,23 @@
         .order-item {
             padding: 20px;
             border-bottom: 1px solid #eee;
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            gap: 20px;
-            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
         }
 
         .order-item:last-child {
             border-bottom: none;
+        }
+
+        .order-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .order-main {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 20px;
+            align-items: start;
         }
 
         .order-image {
@@ -94,6 +126,13 @@
         .order-meta {
             color: #666;
             font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .order-price {
+            font-weight: 600;
+            color: #45A29E;
+            font-size: 16px;
         }
 
         .order-status {
@@ -101,11 +140,17 @@
             border-radius: 20px;
             font-size: 14px;
             font-weight: 500;
+            display: inline-block;
         }
 
         .status-pending {
             background: #fff3cd;
             color: #856404;
+        }
+
+        .status-processing {
+            background: #cce5ff;
+            color: #004085;
         }
 
         .status-confirmed {
@@ -114,8 +159,13 @@
         }
 
         .status-completed {
-            background: #cce5ff;
-            color: #004085;
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .status-cancelled {
+            background: #f8d7da;
+            color: #721c24;
         }
 
         .back-button {
@@ -129,6 +179,7 @@
         .order-actions {
             display: flex;
             gap: 10px;
+            margin-top: 15px;
         }
 
         .action-button {
@@ -138,6 +189,7 @@
             cursor: pointer;
             font-size: 14px;
             transition: all 0.3s ease;
+            font-weight: 500;
         }
 
         .confirm-button {
@@ -145,9 +197,17 @@
             color: white;
         }
 
+        .confirm-button:hover {
+            background: #3d8f8a;
+        }
+
         .cancel-button {
             background: #dc3545;
             color: white;
+        }
+
+        .cancel-button:hover {
+            background: #c82333;
         }
 
         .empty-state {
@@ -155,32 +215,87 @@
             padding: 40px;
             color: #666;
         }
-        
+
         .notification {
-    position: fixed;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 12px 24px;
-    border-radius: 8px;
-    color: white;
-    font-weight: 500;
-    z-index: 1000;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        }
 
-.notification.success {
-    background-color: #45A29E;
-}
+        .notification.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
 
-.notification.error {
-    background-color: #dc3545;
-}
+        .notification.success {
+            background-color: #45A29E;
+        }
 
-.notification.show {
-    opacity: 1;
-}
+        .notification.error {
+            background-color: #dc3545;
+        }
+
+        .order-details-expanded {
+            background: #f8f9fa;
+            padding: 20px;
+            display: none;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .order-details-expanded.show {
+            display: block;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .detail-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .detail-section h4 {
+            margin: 0 0 10px 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .order-main {
+                grid-template-columns: 1fr;
+            }
+
+            .order-image {
+                width: 100%;
+                height: 200px;
+            }
+
+            .filters {
+                overflow-x: auto;
+                padding-bottom: 10px;
+            }
+
+            .filter-button {
+                white-space: nowrap;
+            }
+        }
     </style>
 </head>
 <body>
@@ -188,74 +303,117 @@
         <a href="home.html" class="back-button">← Back to Home</a>
         <div class="user-info">
             <span class="username" id="userLogin">User</span>
-            <span class="timestamp" id="timestamp">2025-05-08 11:36:55</span>
+            <span class="timestamp" id="timestamp"></span>
         </div>
     </nav>
-    
-    <div id="notification" class="notification" style="display: none;">
-    <span id="notificationMessage"></span>
-</div>
+
+    <div id="notification" class="notification">
+        <span id="notificationMessage"></span>
+    </div>
 
     <div class="main-content">
+        <div class="filters">
+            <button class="filter-button active" data-filter="all">All Orders</button>
+            <button class="filter-button" data-filter="pending">Pending</button>
+            <button class="filter-button" data-filter="processing">Processing</button>
+            <button class="filter-button" data-filter="completed">Completed</button>
+            <button class="filter-button" data-filter="cancelled">Cancelled</button>
+        </div>
+
         <div class="orders-container" id="ordersContainer">
+            <!-- Orders will be rendered here -->
         </div>
     </div>
 
     <script>
         let currentUser = null;
+        let currentOrders = [];
+        let currentFilter = 'all';
 
         function updateTimestamp() {
             const now = new Date();
-            const formatted = now.getUTCFullYear() + '-' + 
-                            String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
-                            String(now.getUTCDate()).padStart(2, '0') + ' ' +
-                            String(now.getUTCHours()).padStart(2, '0') + ':' +
-                            String(now.getUTCMinutes()).padStart(2, '0') + ':' +
-                            String(now.getUTCSeconds()).padStart(2, '0');
+            const formatted = now.toISOString().replace('T', ' ').substring(0, 19);
             document.getElementById('timestamp').textContent = formatted;
         }
 
-        function loadOrders() {
-            if (window.AndroidInterface && window.AndroidInterface.getOrders) {
-                window.AndroidInterface.getOrders();
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+
+        function formatCurrency(amount) {
+            return `K${parseFloat(amount).toFixed(2)}`;
+        }
+
+        function toggleOrderDetails(orderId) {
+            const detailsElement = document.getElementById(`order-details-${orderId}`);
+            if (detailsElement) {
+                detailsElement.classList.toggle('show');
             }
         }
 
         function renderOrders(orders) {
+            currentOrders = orders;
             const container = document.getElementById('ordersContainer');
             
             if (!orders || orders.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <h2>No orders found</h2>
-                        <p>When you place or receive orders, they will appear here.</p>
+                        <p>When you receive orders, they will appear here.</p>
                     </div>
                 `;
                 return;
             }
 
-            container.innerHTML = orders.map(order => `
+            const filteredOrders = currentFilter === 'all' 
+                ? orders 
+                : orders.filter(order => order.status.toLowerCase() === currentFilter);
+
+            container.innerHTML = filteredOrders.map(order => `
                 <div class="order-item">
-                    <img src="${order.productImage}" class="order-image" alt="${order.productName}">
-                    <div class="order-details">
-                        <div class="order-title">${order.productName}</div>
-                        <div class="order-meta">
-                            Order #${order.orderId}<br>
-                            ${currentUser.userType === 'farmer' ? 
-                                `Ordered by: ${order.buyerName}` : 
-                                `Sold by: ${order.farmerName}`}
+                    <div class="order-main" onclick="toggleOrderDetails('${order.orderId}')">
+                        <img src="${order.productImage}" class="order-image" alt="${order.productName}">
+                        <div class="order-details">
+                            <div class="order-title">${order.productName}</div>
+                            <div class="order-meta">
+                                Order #${order.orderId}<br>
+                                Ordered by: ${order.userName}<br>
+                                Ordered on: ${formatDate(order.createdAt)}
+                            </div>
+                            <div class="order-price">${formatCurrency(order.totalAmount || 0)}</div>
+                            <span class="order-status status-${order.status.toLowerCase()}">${order.status}</span>
                         </div>
-                    </div>
-                    <div>
-                        <span class="order-status status-${order.status.toLowerCase()}">${order.status}</span>
                         ${currentUser.userType === 'farmer' && order.status === 'PENDING' ? `
                             <div class="order-actions">
-                                <button onclick="updateOrderStatus('${order.orderId}', 'CONFIRMED')" 
+                                <button onclick="event.stopPropagation(); updateOrderStatus('${order.orderId}', 'CONFIRMED')" 
                                         class="action-button confirm-button">Confirm</button>
-                                <button onclick="updateOrderStatus('${order.orderId}', 'CANCELLED')" 
+                                <button onclick="event.stopPropagation(); updateOrderStatus('${order.orderId}', 'CANCELLED')" 
                                         class="action-button cancel-button">Cancel</button>
                             </div>
                         ` : ''}
+                    </div>
+                    <div class="order-details-expanded" id="order-details-${order.orderId}">
+                        <div class="details-grid">
+                            <div class="detail-section">
+                                <h4>Delivery Information</h4>
+                                <div class="order-meta">
+                                    <p><strong>Address:</strong> ${order.deliveryAddress}</p>
+                                    <p><strong>Phone:</strong> ${order.phoneNumber}</p>
+                                    <p><strong>Method:</strong> ${order.deliveryMethod}</p>
+                                </div>
+                            </div>
+                            <div class="detail-section">
+                                <h4>Payment Details</h4>
+                                <div class="order-meta">
+                                    <p><strong>Method:</strong> ${order.paymentMethod}</p>
+                                    <p><strong>Status:</strong> ${order.paymentStatus}</p>
+                                    <p><strong>Subtotal:</strong> ${formatCurrency(order.price * order.quantity)}</p>
+                                    <p><strong>Delivery Fee:</strong> ${formatCurrency(order.deliveryFee)}</p>
+                                    <p><strong>Total:</strong> ${formatCurrency(order.totalAmount)}</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `).join('');
@@ -266,47 +424,26 @@
                 window.AndroidInterface.updateOrderStatus(orderId, status);
             }
         }
-        
-        
-        function showSuccess(message) {
-    const notification = document.getElementById('notification');
-    const notificationMessage = document.getElementById('notificationMessage');
-    
-    notification.className = 'notification success';
-    notificationMessage.textContent = message;
-    notification.style.display = 'block';
-    
-    setTimeout(() => {
-        notification.classList.add('show');
-    }, 100);
-    
-    setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => {
-            notification.style.display = 'none';
-        }, 300);
-    }, 3000);
-}
 
-function showError(message) {
-    const notification = document.getElementById('notification');
-    const notificationMessage = document.getElementById('notificationMessage');
-    
-    notification.className = 'notification error';
-    notificationMessage.textContent = message;
-    notification.style.display = 'block';
-    
-    setTimeout(() => {
-        notification.classList.add('show');
-    }, 100);
-    
-    setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => {
-            notification.style.display = 'none';
-        }, 300);
-    }, 3000);
-}
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            const notificationMessage = document.getElementById('notificationMessage');
+            
+            notification.className = `notification ${type}`;
+            notificationMessage.textContent = message;
+            
+            setTimeout(() => notification.classList.add('show'), 100);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.className = 'notification', 300);
+            }, 3000);
+        }
+
+        function loadOrders() {
+            if (window.AndroidInterface && window.AndroidInterface.getOrders) {
+                window.AndroidInterface.getOrders();
+            }
+        }
 
         function updateUserInterface(userData) {
             currentUser = userData;
@@ -314,15 +451,35 @@ function showError(message) {
             loadOrders();
         }
 
-        // Initialize
+        // Event Listeners
         document.addEventListener('DOMContentLoaded', () => {
             updateTimestamp();
             setInterval(updateTimestamp, 1000);
             
+            // Set up filter buttons
+            document.querySelectorAll('.filter-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    document.querySelectorAll('.filter-button').forEach(btn => 
+                        btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    currentFilter = e.target.dataset.filter;
+                    renderOrders(currentOrders);
+                });
+            });
+
             if (window.AndroidInterface && window.AndroidInterface.getCurrentUser) {
                 window.AndroidInterface.getCurrentUser();
             }
         });
+
+        // Success and error handlers
+        function showSuccess(message) {
+            showNotification(message, 'success');
+        }
+
+        function showError(message) {
+            showNotification(message, 'error');
+        }
     </script>
 </body>
 </html>
