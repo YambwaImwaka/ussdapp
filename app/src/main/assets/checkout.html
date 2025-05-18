@@ -293,6 +293,9 @@ function renderCheckoutSummary(product) {
         return;
     }
 
+    // Store the product data globally
+    currentProduct = product;  // Add this line to store the product
+
     const container = document.getElementById('orderSummary');
     if (!container) {
         console.error('Order summary container not found');
